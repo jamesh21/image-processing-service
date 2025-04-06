@@ -1,4 +1,5 @@
 const s3Service = require('./s3-service')
+const imageModel = require('../models/images-model')
 
 class ImagesService {
 
@@ -11,15 +12,13 @@ class ImagesService {
                 mimetype: file.mimetype
 
             })
-            return url
+
+            // Using url, add to DB
+            return imageModel.addImageToDB('2', url)
         } catch (error) {
             console.error('upload error:', error)
             // throw error here
         }
-
-        // Using url, add to DB
-
-
     }
 }
 
