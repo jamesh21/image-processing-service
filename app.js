@@ -5,9 +5,10 @@ require("express-async-errors");
 const express = require('express')
 const app = express()
 const imageRouter = require('./routes/images-route')
-
+const userRouter = require('./routes/users-route')
 app.use(express.json())
 app.use('/api/v1/images', imageRouter)
+app.use('/api/v1/auth', userRouter)
 
 
 const port = process.env.PORT || 3000
