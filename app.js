@@ -6,8 +6,9 @@ const express = require('express')
 const app = express()
 const imageRouter = require('./routes/images-route')
 const userRouter = require('./routes/users-route')
+const authMiddleware = require('./middleware/auth-middleware')
 app.use(express.json())
-app.use('/api/v1/images', imageRouter)
+app.use('/api/v1/images', authMiddleware, imageRouter)
 app.use('/api/v1/auth', userRouter)
 
 

@@ -2,21 +2,26 @@ const { StatusCodes } = require('http-status-codes')
 const imagesService = require('../services/images-service')
 
 
+
+
+// Upload image passed in from request
+const uploadImage = async (req, res) => {
+    const { userId } = req.user
+    const file = req.file
+    if (!file) {
+        return res.status(400).json({ error: 'No file uploaded' })
+    }
+    // result contains url and metadata of image
+    const result = await imagesService.uploadImage(file, userId)
+
+    return res.status(StatusCodes.OK).json(result)
+}
+
 // Retrieve all images for this user
 const getImages = (req, res) => {
     return res.send('getImages route')
 }
 
-// Upload image passed in from request
-const uploadImage = async (req, res) => {
-    const file = req.file
-    if (!file) {
-        return res.status(400).json({ error: 'No file uploaded' })
-    }
-    const url = await imagesService.uploadImage(file)
-
-    return res.status(StatusCodes.OK).json(url)
-}
 
 // Retrieve image based on ID
 const getImage = (req, res) => {
@@ -24,7 +29,7 @@ const getImage = (req, res) => {
     return res.send('getImage route')
 }
 
-// Retrieve image and perform transformation
+// Retrieve image and perform transformations
 const transformImage = (req, res) => {
     const { id } = req.params
     return res.send('transformImage route')
