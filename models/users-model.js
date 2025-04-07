@@ -1,4 +1,7 @@
 const pool = require('../services/db-service')
+const { DB_TO_API_MAPPING } = require('../constants/field-mapping-constant')
+const { transformFields } = require('../utils/field-mapper-util')
+
 
 class UserModel {
     createNewUserInDB = async (email, password, fullName) => {
@@ -7,7 +10,7 @@ class UserModel {
             // throw err
             console.error('Could not create new user')
         }
-        return newUser.rows[0]
+        return transformFields(newUser.rows[0], DB_TO_API_MAPPING)
     }
 
     /**
@@ -20,7 +23,7 @@ class UserModel {
         if (user.rowCount === 0) {
             throw new NotFoundError('User was not found')
         }
-        return user.rows[0]
+        return transformFields(user.rows[0], DB_TO_API_MAPPING)
     }
 }
 

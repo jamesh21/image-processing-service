@@ -1,9 +1,13 @@
 const userModel = require('../models/users-model')
 const bcrypt = require('bcryptjs')
 const jwt = require("jsonwebtoken");
+const { BadRequestError, UnauthenticatedError } = require('../errors')
 
 class UserService {
     register = async (email, password, fullName) => {
+        if (!email || !password || !fullName) {
+            throw new BadRequestError('Email, password, or name was not provided')
+        }
         // need to hash password
         const salt = await bcrypt.genSalt(10)
         const hashedPassword = await bcrypt.hash(password, salt)
@@ -13,12 +17,15 @@ class UserService {
     }
 
     login = async (email, password) => {
+        if (!email || !password) {
+            throw new BadRequestError('Email or password was not provided')
+        }
         const user = await userModel.getUserFromDB(email)
-        console.log(user)
-        const passwordMatch = await this.comparePassword(password, user.password_hash)
+
+        const passwordMatch = await this.comparePassword(password, user.password)
 
         if (!passwordMatch) {
-            throw new Error('incorrect password')
+            throw new UnauthenticatedError('incorrect password')
         }
         // need to create token
         return this.buildAuthResponse(user)
@@ -33,9 +40,9 @@ class UserService {
     buildAuthResponse = (user) => {
         const token = jwt.sign(
             {
-                email: user.email_address,
-                name: user.full_name,
-                id: user.user_id
+                email: user.email,
+                name: user.name,
+                id: user.userId
             }, process.env.JWT_SECRET,
             {
                 expiresIn: process.env.JWT_LIFETIME
@@ -45,9 +52,9 @@ class UserService {
         return {
             user:
             {
-                name: user.full_name,
-                email: user.email_address,
-                id: user.user_id
+                name: user.name,
+                email: user.email,
+                id: user.userId
             },
             token
         }

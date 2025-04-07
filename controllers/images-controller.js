@@ -14,7 +14,7 @@ const uploadImage = async (req, res) => {
     // result contains url and metadata of image
     const result = await imagesService.uploadImage(file, userId)
 
-    return res.status(StatusCodes.OK).json(result)
+    return res.status(StatusCodes.CREATED).json(result)
 }
 
 // Retrieve all images for this user

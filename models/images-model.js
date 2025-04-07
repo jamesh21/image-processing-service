@@ -1,4 +1,6 @@
 const pool = require('../services/db-service')
+const { DB_TO_API_MAPPING } = require('../constants/field-mapping-constant')
+const { transformFields } = require('../utils/field-mapper-util')
 
 class ImagesModel {
 
@@ -8,7 +10,7 @@ class ImagesModel {
             console.error('could not create image')
             // throw error here
         }
-        return addedImage.rows[0]
+        return transformFields(addedImage.rows[0], DB_TO_API_MAPPING)
     }
 }
 
