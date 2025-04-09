@@ -1,7 +1,7 @@
 // Mapping for db values to values used in backend code
 const DB_TO_API_MAPPING = {
     image_id: "imageId",
-    image_url: "imageUrl",
+    image_s3_key: "imageS3Key",
     email_address: "email",
     full_name: "name",
     user_id: "userId",
@@ -10,7 +10,7 @@ const DB_TO_API_MAPPING = {
 
 // Mapping for backend code to db values.
 const API_TO_DB_MAPPING = {
-    imageUrl: 'image_url',
+    imageS3Key: 'image_s3_key',
     imageId: 'image_id',
     userId: 'user_id',
     email: 'email_address',

@@ -1,4 +1,4 @@
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 
 class S3Service {
     constructor() {
@@ -17,13 +17,21 @@ class S3Service {
             Bucket: this.bucketName,
             Key: key,
             Body: buffer,
-            ContentType: mimetype,
-            ACL: "public-read"
+            ContentType: mimetype
         };
         const command = new PutObjectCommand(uploadParams)
         await this.s3.send(command)
 
         return this.getPublicUrl(key)
+    }
+
+    getImage(s3Key) {
+        const input = {
+            Bucket: this.bucketName,
+            Key: s3Key
+        }
+        const command = new GetObjectCommand(input)
+        return this.s3.send(command)
     }
 
     getPublicUrl(key) {

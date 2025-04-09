@@ -1,7 +1,7 @@
 const s3Service = require('./s3-service')
 const imageModel = require('../models/images-model')
 const sharp = require('sharp');
-const { BadRequestError } = require('../errors')
+const { BadRequestError, UnauthenticatedError, ForbiddenError } = require('../errors')
 
 class ImagesService {
 
@@ -11,10 +11,11 @@ class ImagesService {
         }
         // Do i need diff try/catch blocks for upload and metadata retrieval for better error messages?
         try {
+            const imageKey = `images/${Date.now()}_${file.originalname}`
             // upload image to s3
-            const url = await s3Service.uploadFile({
+            await s3Service.uploadFile({
                 buffer: file.buffer,
-                key: `images/${Date.now()}_${file.originalname}`,
+                key: imageKey,
                 mimetype: file.mimetype
 
             })
@@ -22,14 +23,46 @@ class ImagesService {
             // retrieve metadata for image
             const metadata = await sharp(file.buffer).metadata()
 
-            // Using url, add to DB
-            const addedImageData = await imageModel.addImageToDB(userId, url)
+            // Using s3 key, add to DB
+            const addedImageData = await imageModel.addImageToDB(userId, imageKey)
+            // build api url for retrieving image
+            const url = `${process.env.API_URL}/images/${addedImageData.imageId}`
+            return { data: { url, metadata } }
 
-            return { url: addedImageData.imageUrl, metadata }
         } catch (error) {
             console.error('upload error:', error)
             // throw error here
         }
+    }
+
+    getUserImages = async (userId) => {
+        if (!userId) {
+            throw new UnauthenticatedError('User is not logged in')
+        }
+        const images = await imageModel.getUserImagesFromDB(userId)
+        return {
+            data: images, count: images.length
+        }
+    }
+
+    getImage = async (imageId, userId) => {
+        if (!imageId) {
+            throw new BadRequestError('Image Id was not provided')
+        }
+        if (!userId) {
+            throw new UnauthenticatedError('User is not logged in')
+        }
+
+        const image = await imageModel.getImageFromDB(imageId)
+
+        // check if user is owner of image 
+        if (userId !== image.userId) {
+            throw new ForbiddenError('User cannot access this image')
+        }
+        // Retrieves image stream from s3
+        const imageStream = await s3Service.getImage(image.imageS3Key)
+
+        return imageStream
     }
 }
 

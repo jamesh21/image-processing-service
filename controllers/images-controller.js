@@ -1,5 +1,6 @@
 const { StatusCodes } = require('http-status-codes')
 const imagesService = require('../services/images-service')
+const { BadRequestError } = require('../errors')
 
 
 
@@ -9,7 +10,7 @@ const uploadImage = async (req, res) => {
     const { userId } = req.user
     const file = req.file
     if (!file) {
-        return res.status(400).json({ error: 'No file uploaded' })
+        throw new BadRequestError('No file uploaded')
     }
     // result contains url and metadata of image
     const result = await imagesService.uploadImage(file, userId)
@@ -18,20 +19,34 @@ const uploadImage = async (req, res) => {
 }
 
 // Retrieve all images for this user
-const getImages = (req, res) => {
-    return res.send('getImages route')
+const getImages = async (req, res) => {
+    const { userId } = req.user
+    const userImages = await imagesService.getUserImages(userId)
+    return res.status(StatusCodes.OK).json(userImages)
 }
 
 
-// Retrieve image based on ID
-const getImage = (req, res) => {
+// Retrieve image based on ID and streams it to client
+const getImage = async (req, res) => {
     const { id } = req.params
-    return res.send('getImage route')
+    const { userId } = req.user
+    // Need to check if user has access to this image
+    const imageStream = await imagesService.getImage(id, userId)
+
+    res.setHeader('Content-Type', 'image/jpeg');
+    // stream image as response
+    imageStream.Body.pipe(res)
+
 }
 
 // Retrieve image and perform transformations
 const transformImage = (req, res) => {
     const { id } = req.params
+    // retrieve image from db
+    // perform transformation
+    // store in s3
+    // store in db
+    // returns url and metadata of image
     return res.send('transformImage route')
 }
 
