@@ -11,7 +11,8 @@ class ImagesService {
         }
         // Do i need diff try/catch blocks for upload and metadata retrieval for better error messages?
         try {
-            const imageKey = `images/${Date.now()}_${file.originalname}`
+            const fileName = `${Date.now()}_${file.originalname}`
+            const imageKey = `images/${fileName}`
             // upload image to s3
             await s3Service.uploadFile({
                 buffer: file.buffer,
@@ -24,7 +25,7 @@ class ImagesService {
             const metadata = await sharp(file.buffer).metadata()
 
             // Using s3 key, add to DB
-            const addedImageData = await imageModel.addImageToDB(userId, imageKey)
+            const addedImageData = await imageModel.addImageToDB(userId, imageKey, fileName)
             // build api url for retrieving image
             const url = `${process.env.API_URL}/images/${addedImageData.imageId}`
             return { data: { url, metadata } }
@@ -40,6 +41,10 @@ class ImagesService {
             throw new UnauthenticatedError('User is not logged in')
         }
         const images = await imageModel.getUserImagesFromDB(userId)
+        // build url of images
+        for (const image of images) {
+            image.url = `${process.env.API_URL}/images/${image.imageId}`
+        }
         return {
             data: images, count: images.length
         }

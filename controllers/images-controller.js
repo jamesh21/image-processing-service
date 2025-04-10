@@ -3,8 +3,6 @@ const imagesService = require('../services/images-service')
 const { BadRequestError } = require('../errors')
 
 
-
-
 // Upload image passed in from request
 const uploadImage = async (req, res) => {
     const { userId } = req.user
@@ -18,12 +16,6 @@ const uploadImage = async (req, res) => {
     return res.status(StatusCodes.CREATED).json(result)
 }
 
-// Retrieve all images for this user
-const getImages = async (req, res) => {
-    const { userId } = req.user
-    const userImages = await imagesService.getUserImages(userId)
-    return res.status(StatusCodes.OK).json(userImages)
-}
 
 
 // Retrieve image based on ID and streams it to client
@@ -37,6 +29,14 @@ const getImage = async (req, res) => {
     // stream image as response
     imageStream.Body.pipe(res)
 
+}
+
+
+// Retrieve all images for this user
+const getImages = async (req, res) => {
+    const { userId } = req.user
+    const userImages = await imagesService.getUserImages(userId)
+    return res.status(StatusCodes.OK).json(userImages)
 }
 
 // Retrieve image and perform transformations

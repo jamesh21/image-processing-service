@@ -4,8 +4,8 @@ const { transformFields } = require('../utils/field-mapper-util')
 
 class ImagesModel {
 
-    addImageToDB = async (userId, imageUrl) => {
-        const addedImage = await pool.query('INSERT INTO images (user_id, image_s3_key) VALUES ($1, $2) RETURNING *', [userId, imageUrl])
+    addImageToDB = async (userId, imageUrl, fileName) => {
+        const addedImage = await pool.query('INSERT INTO images (user_id, image_s3_key, image_file_name) VALUES ($1, $2, $3) RETURNING *', [userId, imageUrl, fileName])
         if (addedImage.rowCount === 0) {
             console.error('could not create image')
             // throw error here
@@ -13,7 +13,7 @@ class ImagesModel {
         return transformFields(addedImage.rows[0], DB_TO_API_MAPPING)
     }
     getUserImagesFromDB = async (userId) => {
-        const images = await pool.query('SELECT image_id, image_s3_key, created_at FROM images WHERE user_id=($1)', [userId])
+        const images = await pool.query('SELECT image_id, image_file_name, created_at FROM images WHERE user_id=($1)', [userId])
         const formattedImages = []
         // loop through images
         for (const image of images.rows) {
