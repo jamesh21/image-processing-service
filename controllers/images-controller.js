@@ -40,13 +40,14 @@ const getImages = async (req, res) => {
 }
 
 // Retrieve image and perform transformations
-const transformImage = (req, res) => {
+const transformImage = async (req, res) => {
     const { id } = req.params
-    // retrieve image from db
-    // perform transformation
-    // store in s3
-    // store in db
-    // returns url and metadata of image
+    const { userId } = req.user
+    const { transformations } = req.body
+    const imageStream = await imagesService.transformImage(id, userId, transformations)
+    // console.log(imageStream)
+    // res.setHeader('Content-Type', 'image/jpeg');
+    // imageStream.pipe(res)
     return res.send('transformImage route')
 }
 

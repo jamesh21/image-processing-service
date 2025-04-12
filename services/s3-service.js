@@ -1,5 +1,5 @@
 const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
-
+// const { Upload } = require('@aws-sdk/lib-storage');
 class S3Service {
     constructor() {
         this.bucketName = process.env.S3_BUCKET_NAME
@@ -19,6 +19,12 @@ class S3Service {
             Body: buffer,
             ContentType: mimetype
         };
+        // const upload = new Upload({
+        //     client: this.s3,
+        //     params: {
+
+        //     }
+        // })
         const command = new PutObjectCommand(uploadParams)
         await this.s3.send(command)
 
