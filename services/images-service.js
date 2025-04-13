@@ -2,6 +2,7 @@ const s3Service = require('./s3-service')
 const imageModel = require('../models/images-model')
 const sharp = require('sharp');
 const { BadRequestError, UnauthenticatedError, ForbiddenError } = require('../errors')
+const path = require('path')
 
 class ImagesService {
 
@@ -13,7 +14,7 @@ class ImagesService {
         try {
             const fileName = `${Date.now()}_${file.originalname}`
             const imageKey = `images/${fileName}`
-            console.log(file.mimetype)
+
             // upload image to s3
             await s3Service.uploadFile({
                 buffer: file.buffer,
@@ -87,41 +88,57 @@ class ImagesService {
             throw new ForbiddenError('User cannot access this image')
         }
 
+        const { name: imageName, ext } = path.parse(imageDetails.imageFileName)
+
         // retrieve image from s3 and perform transformation
         const image = await s3Service.getImage(imageDetails.imageS3Key)
 
+        console.log(image.ContentType)
+
+
+        let transformList = ''
         // create transformer object
         const transformer = sharp()
         if (rotate) {
             transformer.rotate(rotate)
+            transformList += `_rotate${rotate}`
         }
         if (resize) {
             transformer.resize(resize.width, resize.height)
+            transformList += `_resizew${resize.width}h${resize.height}`
         }
+        //With this name, we can check cache
+        // TODO add to redis cache 
+        const newImageName = `${imageName}_${transformList}`
 
         // apply transformations to image and create image buffer
         const transformedImgBuffer = await image.Body.pipe(transformer).toBuffer();
 
         // store in s3
-        const fileName = `${Date.now()}_transformed-${imageId}`
-        const imageKey = `images/${fileName}`
+        const imageKey = `images/${newImageName}.${ext}`
         await s3Service.uploadFile({
             buffer: transformedImgBuffer,
             key: imageKey, //TODO need to create unique key with transformations
-            mimetype: 'image/jpeg'
+            mimetype: image.ContentType
         })
         // store in db
         // Using s3 key, add to DB
-        // const addedImageData = await imageModel.addImageToDB(userId, imageKey, fileName)
-        // const url = this.buildImageUrl(addedImageData.imageId)
+        const addedImageData = await imageModel.addImageToDB(userId, imageKey, `${newImageName}.${ext}`)
+        const url = this.buildImageUrl(addedImageData.imageId)
+        console.log(url)
 
-        // TODO add to redis cache
         // returns url and metadata of image
     }
 
     buildImageUrl = (imageId) => {
         return `${process.env.API_URL}/images/${imageId}`
     }
+
+    // const transformationLabel = [
+    //     width ? `w${width}` : null,
+    //     height ? `h${height}` : null,
+    //     grayscale ? 'grayscale' : null,
+    //   ].filter(Boolean).join('_'); // 👉 w300_h200_grayscale
 }
 
 module.exports = new ImagesService()
