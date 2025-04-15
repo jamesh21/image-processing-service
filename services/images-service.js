@@ -24,7 +24,7 @@ class ImagesService {
             })
 
             // retrieve metadata for image
-            const metadata = await sharp(file.buffer).metadata()
+            const metadata = this.getFilteredMetadata(await sharp(file.buffer).metadata())
 
             // Using s3 key, add to DB
             const addedImageData = await imageModel.addImageToDB(userId, imageKey, fileName)
@@ -74,8 +74,7 @@ class ImagesService {
     }
 
     transformImage = async (imageId, userId, transformations) => {
-        //TODO destructure transformations to individual transformation
-        const { resize, rotate } = transformations
+
         if (!imageId || !transformations) {
             throw new BadRequestError('Image id or transformation was not provided')
         }
@@ -84,56 +83,83 @@ class ImagesService {
         }
         // retrieve image details from db
         const imageDetails = await imageModel.getImageFromDB(imageId)
+
         if (userId !== imageDetails.userId) {
             throw new ForbiddenError('User cannot access this image')
         }
 
+        // extract transformation and create labels
+        const { transformLabels, transformer } = this.extractTransformations(transformations)
+
         const { name: imageName, ext } = path.parse(imageDetails.imageFileName)
+
+        const newImageName = `${imageName}_${transformLabels.join('_')}`
 
         // retrieve image from s3 and perform transformation
         const image = await s3Service.getImage(imageDetails.imageS3Key)
 
-        console.log(image.ContentType)
+        //With this name, we can check cache
+        // TODO add to redis cache 
 
+        // apply transformations to image and create image buffer
+        const transformedImgBuffer = await image.Body.pipe(transformer).toBuffer();
+        const metadata = this.getFilteredMetadata(await sharp(transformedImgBuffer).metadata(), { transformations: transformLabels })
+        // metadata.transformations = transformLabels
+        // store in s3
+        const imageKey = `images/${newImageName}${ext}`
+        await s3Service.uploadFile({
+            buffer: transformedImgBuffer,
+            key: imageKey,
+            mimetype: image.ContentType
+        })
 
-        let transformList = ''
+        // store in db
+        const addedImageData = await imageModel.addImageToDB(userId, imageKey, `${newImageName}${ext}`)
+        const url = this.buildImageUrl(addedImageData.imageId)
+
+        return { url, metadata }
+    }
+
+    // Extracts all transformations and adds them individually to sharp's transformer and also build the label for naming the new file.
+    extractTransformations = (transformations) => {
+        const { resize, rotate, filters, flip } = transformations
+
+        const transformLabels = []
         // create transformer object
         const transformer = sharp()
         if (rotate) {
             transformer.rotate(rotate)
-            transformList += `_rotate${rotate}`
+            transformLabels.push(`rotate${rotate}`)
         }
-        if (resize) {
+        if (flip) {
+            transformer.flip()
+            transformLabels.push('flip')
+        }
+        if (resize && resize.height, resize.width) {
             transformer.resize(resize.width, resize.height)
-            transformList += `_resizew${resize.width}h${resize.height}`
+            transformLabels.push(`resize:w${resize.width},h${resize.height}`)
         }
-        //With this name, we can check cache
-        // TODO add to redis cache 
-        const newImageName = `${imageName}_${transformList}`
+        if (filters.grayscale) {
+            transformer.grayscale()
+            transformLabels.push('grayscale')
+        }
 
-        // apply transformations to image and create image buffer
-        const transformedImgBuffer = await image.Body.pipe(transformer).toBuffer();
-
-        // store in s3
-        const imageKey = `images/${newImageName}.${ext}`
-        await s3Service.uploadFile({
-            buffer: transformedImgBuffer,
-            key: imageKey, //TODO need to create unique key with transformations
-            mimetype: image.ContentType
-        })
-        // store in db
-        // Using s3 key, add to DB
-        const addedImageData = await imageModel.addImageToDB(userId, imageKey, `${newImageName}.${ext}`)
-        const url = this.buildImageUrl(addedImageData.imageId)
-        console.log(url)
-
-        // returns url and metadata of image
+        return { transformer, transformLabels }
     }
 
     buildImageUrl = (imageId) => {
         return `${process.env.API_URL}/images/${imageId}`
     }
 
+    getFilteredMetadata = (fullMetaData, customFields) => {
+        return {
+            size: fullMetaData.size,
+            format: fullMetaData.format,
+            width: fullMetaData.width,
+            height: fullMetaData.height,
+            ...customFields
+        }
+    }
     // const transformationLabel = [
     //     width ? `w${width}` : null,
     //     height ? `h${height}` : null,

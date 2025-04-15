@@ -44,11 +44,10 @@ const transformImage = async (req, res) => {
     const { id } = req.params
     const { userId } = req.user
     const { transformations } = req.body
-    const imageStream = await imagesService.transformImage(id, userId, transformations)
-    // console.log(imageStream)
-    // res.setHeader('Content-Type', 'image/jpeg');
-    // imageStream.pipe(res)
-    return res.send('transformImage route')
+    const result = await imagesService.transformImage(id, userId, transformations)
+
+
+    return res.status(StatusCodes.OK).json(result)
 }
 
 module.exports = { getImages, uploadImage, getImage, transformImage }
