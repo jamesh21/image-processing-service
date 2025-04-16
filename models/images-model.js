@@ -13,7 +13,7 @@ class ImagesModel {
         return transformFields(addedImage.rows[0], DB_TO_API_MAPPING)
     }
     getUserImagesFromDB = async (userId) => {
-        const images = await pool.query('SELECT image_id, image_file_name, created_at FROM images WHERE user_id=($1)', [userId])
+        const images = await pool.query('SELECT image_id, image_file_name, created_at FROM images WHERE user_id=($1) ORDER BY created_at DESC ', [userId])
         const formattedImages = []
         // loop through images
         for (const image of images.rows) {
@@ -27,6 +27,15 @@ class ImagesModel {
             throw new NotFoundError('Image was not found')
         }
         return transformFields(image.rows[0], DB_TO_API_MAPPING)
+    }
+    getUserPaginatedImagesFromDB = async (userId, offset, limit) => {
+        const images = await pool.query('SELECT image_id, image_file_name, created_at FROM images  WHERE user_id=($1) ORDER BY created_at DESC LIMIT ($2) OFFSET ($3)', [userId, limit, offset])
+        const formattedImages = []
+        // loop through images
+        for (const image of images.rows) {
+            formattedImages.push(transformFields(image, DB_TO_API_MAPPING))
+        }
+        return formattedImages
     }
 }
 
