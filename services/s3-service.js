@@ -19,6 +19,7 @@ class S3Service {
             Body: buffer,
             ContentType: mimetype
         };
+
         const command = new PutObjectCommand(uploadParams)
         await this.s3.send(command)
 
