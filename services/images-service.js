@@ -74,13 +74,13 @@ class ImagesService {
     }
 
     transformImage = async (imageId, userId, transformations) => {
-
         if (!imageId || !transformations) {
             throw new BadRequestError('Image id or transformation was not provided')
         }
         if (!userId) {
             throw new UnauthenticatedError('User is not logged in')
         }
+
         // retrieve image details from db
         const imageDetails = await imageModel.getImageFromDB(imageId)
 
@@ -89,8 +89,9 @@ class ImagesService {
         }
 
         // extract transformation and create labels
-        const { transformLabels, transformer } = this.extractTransformations(transformations)
+        const { transformLabels, transformer } = this.buildTransformer(transformations)
 
+        // retrieve original image name and file extension
         const { name: imageName, ext } = path.parse(imageDetails.imageFileName)
 
         const newImageName = `${imageName}_${transformLabels.join('_')}`
@@ -104,7 +105,7 @@ class ImagesService {
         // apply transformations to image and create image buffer
         const transformedImgBuffer = await image.Body.pipe(transformer).toBuffer();
         const metadata = this.getFilteredMetadata(await sharp(transformedImgBuffer).metadata(), { transformations: transformLabels })
-        // metadata.transformations = transformLabels
+
         // store in s3
         const imageKey = `images/${newImageName}${ext}`
         await s3Service.uploadFile({
@@ -121,29 +122,80 @@ class ImagesService {
     }
 
     // Extracts all transformations and adds them individually to sharp's transformer and also build the label for naming the new file.
-    extractTransformations = (transformations) => {
-        const { resize, rotate, filters, flip } = transformations
+    buildTransformer = (options) => {
 
-        const transformLabels = []
-        // create transformer object
-        const transformer = sharp()
-        if (rotate) {
-            transformer.rotate(rotate)
-            transformLabels.push(`rotate${rotate}`)
-        }
-        if (flip) {
-            transformer.flip()
-            transformLabels.push('flip')
-        }
-        if (resize && resize.height, resize.width) {
-            transformer.resize(resize.width, resize.height)
-            transformLabels.push(`resize:w${resize.width},h${resize.height}`)
-        }
-        if (filters.grayscale) {
-            transformer.grayscale()
-            transformLabels.push('grayscale')
+        const transformLabels = [], transformer = sharp(), errors = ['Invalid input for the following transformatios']
+
+        // Lookup table, for different transformations
+        const transformationMap = {
+            rotate: (angle) => {
+                if (typeof angle !== 'number') {
+                    errors.push('rotation must be a number')
+                } else {
+                    transformer.rotate(angle)
+                    transformLabels.push(`rotate${angle}`)
+                }
+            },
+            flip: (val) => {
+                if (typeof val !== 'boolean') {
+                    errors.push('flip must be a boolean')
+                } else if (val) {
+                    transformer.flip()
+                    transformLabels.push('flip')
+                }
+            },
+            resize: (options) => {
+                const { width, height } = options
+                if (typeof width !== 'number' || typeof height !== 'number') {
+                    errors.push('resize must include width and height as numbers')
+                } else {
+                    transformer.resize(options)
+                    transformLabels.push(`resize:w${options.width},h${options.height}`)
+                }
+            },
+            crop: (options) => {
+                const { width, height, top, left } = options
+                if (typeof width !== 'number' || typeof height !== 'number' || typeof left !== 'number' || typeof top !== 'number') {
+                    errors.push('crop must include width, height, top, left as numbers')
+                } else {
+                    transformer.extract(options)
+                    transformLabels.push(`crop:w${options.width},h${options.height},top${options.top},left${options.left}`)
+                }
+            },
+            grayscale: (val) => {
+                if (typeof val !== 'boolean') {
+                    errors.push('grayscale must be a boolean')
+                } else if (val) {
+                    transformer.grayscale()
+                    transformLabels.push('grayscale')
+                }
+            },
+            sepia: (val) => {
+                if (typeof val !== 'boolean') {
+                    errors.push('sepia must be a boolean')
+                } else if (val) {
+                    transformer.recomb([
+                        [0.393, 0.769, 0.189],
+                        [0.349, 0.686, 0.168],
+                        [0.272, 0.534, 0.131]
+                    ])
+                    transformLabels.push('sepia')
+                }
+            }
         }
 
+        // Loop through each transsformation and create the label and add to transformer object
+        for (const [key, value] of Object.entries(options)) {
+            const transformFn = transformationMap[key]
+            if (transformFn) {
+                transformFn(value)
+            }
+        }
+
+        // Check if errors came up
+        if (errors.length > 1) {
+            throw new BadRequestError(errors.join(', '))
+        }
         return { transformer, transformLabels }
     }
 
@@ -160,11 +212,6 @@ class ImagesService {
             ...customFields
         }
     }
-    // const transformationLabel = [
-    //     width ? `w${width}` : null,
-    //     height ? `h${height}` : null,
-    //     grayscale ? 'grayscale' : null,
-    //   ].filter(Boolean).join('_'); // 👉 w300_h200_grayscale
 }
 
 module.exports = new ImagesService()

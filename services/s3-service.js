@@ -1,5 +1,5 @@
 const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
-// const { Upload } = require('@aws-sdk/lib-storage');
+
 class S3Service {
     constructor() {
         this.bucketName = process.env.S3_BUCKET_NAME
