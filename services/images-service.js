@@ -39,11 +39,22 @@ class ImagesService {
         }
     }
 
-    getUserImages = async (userId) => {
+    getUserImages = async (userId, page, limit) => {
         if (!userId) {
             throw new UnauthenticatedError('User is not logged in')
         }
-        const images = await imageModel.getUserImagesFromDB(userId)
+        let images;
+
+        if (!limit) {
+            images = await imageModel.getUserImagesFromDB(userId)
+        } else {
+            if (!parseInt(limit) || !parseInt(page)) {
+                throw new BadRequestError('Limit and page must be passed in as a number')
+            }
+            const offset = (page - 1) * limit
+            images = await imageModel.getUserPaginatedImagesFromDB(userId, offset, limit)
+        }
+
         // build url of images
         for (const image of images) {
             image.url = `${process.env.API_URL}/images/${image.imageId}`

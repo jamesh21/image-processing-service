@@ -35,7 +35,9 @@ const getImage = async (req, res) => {
 // Retrieve all images for this user
 const getImages = async (req, res) => {
     const { userId } = req.user
-    const userImages = await imagesService.getUserImages(userId)
+    const { page, limit } = req.query
+
+    const userImages = await imagesService.getUserImages(userId, page, limit)
     return res.status(StatusCodes.OK).json(userImages)
 }
 
