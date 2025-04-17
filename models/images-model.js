@@ -1,11 +1,11 @@
 const pool = require('../services/db-service')
-const { DB_TO_API_MAPPING } = require('../constants/field-mapping-constant')
+const { DB_TO_API_MAPPING } = require('../constants/app-constant')
 const { transformFields } = require('../utils/field-mapper-util')
 
 class ImagesModel {
 
-    addImageToDB = async (userId, imageUrl, fileName) => {
-        const addedImage = await pool.query('INSERT INTO images (user_id, image_s3_key, image_file_name) VALUES ($1, $2, $3) RETURNING *', [userId, imageUrl, fileName])
+    addImageToDB = async (userId, imageUrl, fileName, mimetype) => {
+        const addedImage = await pool.query('INSERT INTO images (user_id, image_s3_key, image_file_name, mime_type) VALUES ($1, $2, $3, $4) RETURNING *', [userId, imageUrl, fileName, mimetype])
         if (addedImage.rowCount === 0) {
             console.error('could not create image')
             // throw error here

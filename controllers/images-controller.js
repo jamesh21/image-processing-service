@@ -22,13 +22,12 @@ const uploadImage = async (req, res) => {
 const getImage = async (req, res) => {
     const { id } = req.params
     const { userId } = req.user
+    const { format } = req.query
     // Need to check if user has access to this image
-    const imageStream = await imagesService.getImage(id, userId)
+    const { stream, mimeType } = await imagesService.getImage(id, userId, format)
 
-    res.setHeader('Content-Type', 'image/jpeg');
-    // stream image as response
-    imageStream.Body.pipe(res)
-
+    res.setHeader('Content-Type', mimeType);
+    stream.pipe(res)
 }
 
 
