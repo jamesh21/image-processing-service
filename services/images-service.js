@@ -3,6 +3,7 @@ const imageModel = require('../models/images-model')
 const sharp = require('sharp');
 const { BadRequestError, UnauthenticatedError, ForbiddenError } = require('../errors')
 const path = require('path')
+const { SUPPORTED_FORMATS } = require('../constants/app-constant')
 
 class ImagesService {
 
@@ -20,14 +21,13 @@ class ImagesService {
                 buffer: file.buffer,
                 key: imageKey,
                 mimetype: file.mimetype
-
             })
 
             // retrieve metadata for image
             const metadata = this.getFilteredMetadata(await sharp(file.buffer).metadata())
 
             // Using s3 key, add to DB
-            const addedImageData = await imageModel.addImageToDB(userId, imageKey, fileName)
+            const addedImageData = await imageModel.addImageToDB(userId, imageKey, fileName, file.mimetype)
             // build api url for retrieving image
             const url = this.buildImageUrl(addedImageData.imageId)
 
@@ -64,12 +64,16 @@ class ImagesService {
         }
     }
 
-    getImage = async (imageId, userId) => {
+    getImage = async (imageId, userId, format) => {
+
+        if (!userId) {
+            throw new UnauthenticatedError('User is not logged in')
+        }
         if (!imageId) {
             throw new BadRequestError('Image Id was not provided')
         }
-        if (!userId) {
-            throw new UnauthenticatedError('User is not logged in')
+        if (format && !SUPPORTED_FORMATS.includes(format)) {
+            throw new BadRequestError('Format is not supported')
         }
 
         const image = await imageModel.getImageFromDB(imageId)
@@ -79,9 +83,14 @@ class ImagesService {
             throw new ForbiddenError('User cannot access this image')
         }
         // Retrieves image stream from s3
-        const imageStream = await s3Service.getImage(image.imageS3Key)
+        const { Body } = await s3Service.getImage(image.imageS3Key)
 
-        return imageStream
+        if (format) {
+            const transformer = sharp().toFormat(format)
+            // Returns image stream with transformed format
+            return { stream: Body.pipe(transformer), mimeType: `image/${format}` }
+        }
+        return { stream: Body, mimeType: image.mimeType }
     }
 
     transformImage = async (imageId, userId, transformations) => {

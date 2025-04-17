@@ -1,5 +1,5 @@
 const pool = require('../services/db-service')
-const { DB_TO_API_MAPPING } = require('../constants/field-mapping-constant')
+const { DB_TO_API_MAPPING } = require('../constants/app-constant')
 const { transformFields } = require('../utils/field-mapper-util')
 
 
