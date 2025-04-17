@@ -11,31 +11,27 @@ class ImagesService {
         if (!file || !userId) {
             throw new BadRequestError('File or userId was not provided')
         }
-        // Do i need diff try/catch blocks for upload and metadata retrieval for better error messages?
+        const fileName = `${Date.now()}_${file.originalname}`
+        const imageKey = `images/${fileName}`
+
         try {
-            const fileName = `${Date.now()}_${file.originalname}`
-            const imageKey = `images/${fileName}`
 
             // upload image to s3
-            await s3Service.uploadFile({
-                buffer: file.buffer,
-                key: imageKey,
-                mimetype: file.mimetype
-            })
+            await this.uploadImageToS3(file.buffer, imageKey, file.mimetype)
 
             // retrieve metadata for image
-            const metadata = this.getFilteredMetadata(await sharp(file.buffer).metadata())
+            const metadata = this.getFilteredMetadata(await this.getMetaData(file.buffer))
 
             // Using s3 key, add to DB
-            const addedImageData = await imageModel.addImageToDB(userId, imageKey, fileName, file.mimetype)
+            const addedImageData = await this.addImageToDB(userId, imageKey, fileName, file.mimetype)
+
             // build api url for retrieving image
             const url = this.buildImageUrl(addedImageData.imageId)
 
             return { data: { url, metadata } }
 
         } catch (error) {
-            console.error('upload error:', error)
-            // throw error here
+            throw error
         }
     }
 
@@ -230,6 +226,45 @@ class ImagesService {
             width: fullMetaData.width,
             height: fullMetaData.height,
             ...customFields
+        }
+    }
+
+    uploadImageToS3 = async (buffer, imageKey, mimeType) => {
+        try {
+            return await s3Service.uploadFile({
+                buffer: buffer,
+                key: imageKey,
+                mimetype: mimeType
+            })
+        } catch (error) {
+            throw new Error(`Failed to upload image with key ${imageKey} to S3: ${error.message}`)
+        }
+    }
+
+    getMetaData = async (buffer) => {
+        try {
+            return await sharp(buffer).metadata()
+        } catch (error) {
+            throw new Error(`Failed to retrieve metadata for image with key ${imageKey}: ${error.message}`)
+        }
+    }
+
+    addImageToDB = async (userId, imageKey, fileName, mimeType) => {
+        try {
+            return await imageModel.addImageToDB(userId, imageKey, fileName, mimeType)
+        } catch (error) {
+            try {
+                // Rollback entry in s3
+                await s3Service.deleteImage(imageKey)
+                console.error(`Removing ${imageKey} from s3 since there was a db insertion failure`)
+            } catch (s3Error) {
+                console.error('Failed to rollback s3 upload', {
+                    imageKey,
+                    originalError: error.message,
+                    rollbackError: s3Error.message
+                })
+            }
+            throw error
         }
     }
 }
