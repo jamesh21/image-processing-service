@@ -15,7 +15,6 @@ class ImagesService {
         const imageKey = `images/${fileName}`
 
         try {
-
             // upload image to s3
             await this.uploadImageToS3(file.buffer, imageKey, file.mimetype)
 
@@ -53,7 +52,7 @@ class ImagesService {
 
         // build url of images
         for (const image of images) {
-            image.url = `${process.env.API_URL}/images/${image.imageId}`
+            image.url = this.buildImageUrl(image.imageId)
         }
         return {
             data: images, count: images.length
@@ -69,26 +68,36 @@ class ImagesService {
             throw new BadRequestError('Image Id was not provided')
         }
         if (format && !SUPPORTED_FORMATS.includes(format)) {
-            throw new BadRequestError('Format is not supported')
+            throw new BadRequestError('Image format is not supported')
         }
 
-        const image = await imageModel.getImageFromDB(imageId)
+        try {
+            const image = await this.getImageFromDB(imageId)
+            // check if user is owner of image 
+            if (userId !== image.userId) {
+                throw new ForbiddenError('User cannot access this image')
+            }
+            // Retrieves image stream from s3
+            const { Body } = await this.getImageFromS3(image.imageS3Key)
 
-        // check if user is owner of image 
-        if (userId !== image.userId) {
-            throw new ForbiddenError('User cannot access this image')
+            if (format) {
+                const transformer = sharp().toFormat(format)
+                // Returns image stream with transformed format
+                return { stream: Body.pipe(transformer), mimeType: `image/${format}` }
+            }
+            return { stream: Body, mimeType: image.mimeType }
+        } catch (err) {
+            throw err
         }
-        // Retrieves image stream from s3
-        const { Body } = await s3Service.getImage(image.imageS3Key)
-
-        if (format) {
-            const transformer = sharp().toFormat(format)
-            // Returns image stream with transformed format
-            return { stream: Body.pipe(transformer), mimeType: `image/${format}` }
-        }
-        return { stream: Body, mimeType: image.mimeType }
     }
 
+    /**
+     * Transforms the image corresponding to the image id passed in. The transformed image will be added to the DB and reuploaded to s3
+     * @param {*} imageId the image id of the image that will be transformed.
+     * @param {*} userId 
+     * @param {*} transformations an object of different transformations that will be performed on the image
+     * @returns 
+     */
     transformImage = async (imageId, userId, transformations) => {
         if (!imageId || !transformations) {
             throw new BadRequestError('Image id or transformation was not provided')
@@ -96,45 +105,47 @@ class ImagesService {
         if (!userId) {
             throw new UnauthenticatedError('User is not logged in')
         }
+        try {
+            // retrieve image details from db
+            const imageDetailsFromDB = await this.getImageFromDB(imageId)
 
-        // retrieve image details from db
-        const imageDetails = await imageModel.getImageFromDB(imageId)
+            if (userId !== imageDetailsFromDB.userId) {
+                throw new ForbiddenError('User cannot access this image')
+            }
 
-        if (userId !== imageDetails.userId) {
-            throw new ForbiddenError('User cannot access this image')
+            // extract transformation and create labels
+            const { transformLabels, transformer } = this.buildTransformer(transformations)
+
+            // retrieve original image name and file extension, this will be used when naming the transformed image.
+            const { name: imageName, ext } = path.parse(imageDetailsFromDB.imageFileName)
+
+            // New image name with old name and transformations performed
+            const newImageName = `${imageName}_${transformLabels.join('_')}`
+
+            // retrieve actual image from s3 and perform transformations
+            const image = await this.getImageFromS3(imageDetailsFromDB.imageS3Key)
+
+            //With this name, we can check cache
+            // TODO add to redis cache 
+
+            // apply transformations to image and create image buffer
+            const transformedImgBuffer = await image.Body.pipe(transformer).toBuffer();
+            const metadata = this.getFilteredMetadata(await sharp(transformedImgBuffer).metadata(), { transformations: transformLabels })
+
+            // store in s3
+            const imageKey = `images/${newImageName}${ext}`
+            await this.uploadImageToS3(transformedImgBuffer, imageKey, image.ContentType)
+
+            // store in db
+            const addedImageData = await this.addImageToDB(userId, imageKey, `${newImageName}${ext}`, image.ContentType)
+            const url = this.buildImageUrl(addedImageData.imageId)
+
+            return { url, metadata }
+
+        } catch (error) {
+            throw error
         }
 
-        // extract transformation and create labels
-        const { transformLabels, transformer } = this.buildTransformer(transformations)
-
-        // retrieve original image name and file extension
-        const { name: imageName, ext } = path.parse(imageDetails.imageFileName)
-
-        const newImageName = `${imageName}_${transformLabels.join('_')}`
-
-        // retrieve image from s3 and perform transformation
-        const image = await s3Service.getImage(imageDetails.imageS3Key)
-
-        //With this name, we can check cache
-        // TODO add to redis cache 
-
-        // apply transformations to image and create image buffer
-        const transformedImgBuffer = await image.Body.pipe(transformer).toBuffer();
-        const metadata = this.getFilteredMetadata(await sharp(transformedImgBuffer).metadata(), { transformations: transformLabels })
-
-        // store in s3
-        const imageKey = `images/${newImageName}${ext}`
-        await s3Service.uploadFile({
-            buffer: transformedImgBuffer,
-            key: imageKey,
-            mimetype: image.ContentType
-        })
-
-        // store in db
-        const addedImageData = await imageModel.addImageToDB(userId, imageKey, `${newImageName}${ext}`)
-        const url = this.buildImageUrl(addedImageData.imageId)
-
-        return { url, metadata }
     }
 
     // Extracts all transformations and adds them individually to sharp's transformer and also build the label for naming the new file.
@@ -265,6 +276,20 @@ class ImagesService {
                 })
             }
             throw error
+        }
+    }
+    getImageFromDB = async (imageId) => {
+        try {
+            return await imageModel.getImageFromDB(imageId)
+        } catch (error) {
+            throw new Error(`Failed to retrieve image from DB for image id ${imageId}`)
+        }
+    }
+    getImageFromS3 = async (imageKey) => {
+        try {
+            return await s3Service.getImage(imageKey)
+        } catch (error) {
+            throw new Error(`Failed to retrieve image from s3 for ${imageKey}`)
         }
     }
 }

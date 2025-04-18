@@ -22,8 +22,6 @@ class S3Service {
 
         const command = new PutObjectCommand(uploadParams)
         await this.s3.send(command)
-
-        return this.getPublicUrl(key)
     }
 
     getImage(s3Key) {
@@ -43,10 +41,6 @@ class S3Service {
         const command = new DeleteObjectCommand(input)
         return this.s3.send(command)
     }
-    getPublicUrl(key) {
-        return `https://${this.bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-    }
-
 
 }
 

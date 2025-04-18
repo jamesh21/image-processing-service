@@ -25,7 +25,7 @@ class UserService {
         const passwordMatch = await this.comparePassword(password, user.password)
 
         if (!passwordMatch) {
-            throw new UnauthenticatedError('incorrect password')
+            throw new UnauthenticatedError('Incorrect password')
         }
         // need to create token
         return this.buildAuthResponse(user)

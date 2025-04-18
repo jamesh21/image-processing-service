@@ -13,6 +13,7 @@ class ImagesModel {
      * @returns The created image row
      */
     addImageToDB = async (userId, imageUrl, fileName, mimetype) => {
+        // Try catch for db queries?
         const addedImage = await pool.query('INSERT INTO images (user_id, image_s3_key, image_file_name, mime_type) VALUES ($1, $2, $3, $4) RETURNING *', [userId, imageUrl, fileName, mimetype])
 
         if (addedImage.rowCount === 0) {
