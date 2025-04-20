@@ -3,7 +3,7 @@ const imageModel = require('../models/images-model')
 const sharp = require('sharp');
 const { BadRequestError, UnauthenticatedError, ForbiddenError } = require('../errors')
 const path = require('path')
-const { SUPPORTED_FORMATS } = require('../constants/app-constant')
+const { SUPPORTED_FORMATS, FORMAT_MAPPING } = require('../constants/app-constant')
 
 class ImagesService {
 
@@ -11,18 +11,34 @@ class ImagesService {
         if (!file || !userId) {
             throw new BadRequestError('File or userId was not provided')
         }
-        const fileName = `${Date.now()}_${file.originalname}`
-        const imageKey = `images/${fileName}`
+        const originalname = file.originalname
+        let buffer = file.buffer
+        const fileName = `${Date.now()}_${originalname}`
+        // Retrieve file ext of file uploaded
+        const expectedType = path.parse(fileName).ext.replace('.', '').toLowerCase()
+        if (!SUPPORTED_FORMATS.includes(expectedType)) {
+            throw new BadRequestError('Image format is not supported')
+        }
 
         try {
-            // upload image to s3
-            await this.uploadImageToS3(file.buffer, imageKey, file.mimetype)
-
             // retrieve metadata for image
-            const metadata = this.getFilteredMetadata(await this.getMetaData(file.buffer))
+            let metadata = this.getFilteredMetadata(await this.getMetaData(buffer))
+
+            // check if file passed in is actually the correct file format as extension
+            // if not, convert it to that format
+            if (FORMAT_MAPPING[metadata.format].ext !== expectedType) {
+                buffer = await sharp(buffer).toFormat(expectedType).toBuffer()
+                // retrieve updated metadata after converting
+                metadata = this.getFilteredMetadata(await this.getMetaData(buffer))
+            }
+
+            const imageKey = `images/${fileName}`
+
+            // upload image to s3
+            await this.uploadImageToS3(buffer, imageKey, FORMAT_MAPPING[expectedType].mime)
 
             // Using s3 key, add to DB
-            const addedImageData = await this.addImageToDB(userId, imageKey, fileName, file.mimetype)
+            const addedImageData = await this.addImageToDB(userId, imageKey, fileName, FORMAT_MAPPING[expectedType].mime)
 
             // build api url for retrieving image
             const url = this.buildImageUrl(addedImageData.imageId)
@@ -81,7 +97,7 @@ class ImagesService {
             const { Body } = await this.getImageFromS3(image.imageS3Key)
 
             if (format) {
-                const transformer = sharp().toFormat(format)
+                const { transformer } = this.buildTransformer({ format })
                 // Returns image stream with transformed format
                 return { stream: Body.pipe(transformer), mimeType: `image/${format}` }
             }
@@ -132,9 +148,11 @@ class ImagesService {
             const transformedImgBuffer = await image.Body.pipe(transformer).toBuffer();
             const metadata = this.getFilteredMetadata(await sharp(transformedImgBuffer).metadata(), { transformations: transformLabels })
 
+            // is ext still needed?, can't we get it from metadata?
+
             // store in s3
-            const imageKey = `images/${newImageName}${ext}`
-            await this.uploadImageToS3(transformedImgBuffer, imageKey, image.ContentType)
+            const imageKey = `images/${newImageName}.${FORMAT_MAPPING[metadata.format].ext}`
+            await this.uploadImageToS3(transformedImgBuffer, imageKey, FORMAT_MAPPING[metadata.format].mime)
 
             // store in db
             const addedImageData = await this.addImageToDB(userId, imageKey, `${newImageName}${ext}`, image.ContentType)
@@ -150,9 +168,8 @@ class ImagesService {
 
     // Extracts all transformations and adds them individually to sharp's transformer and also build the label for naming the new file.
     buildTransformer = (options) => {
-
         const transformLabels = [], transformer = sharp(), errors = ['Invalid input for the following transformatios']
-
+        console.log(options)
         // Lookup table, for different transformations
         const transformationMap = {
             rotate: (angle) => {
@@ -187,6 +204,14 @@ class ImagesService {
                 } else {
                     transformer.extract(options)
                     transformLabels.push(`crop:w${options.width},h${options.height},top${options.top},left${options.left}`)
+                }
+            },
+            format: (newFormat) => {
+                if (typeof newFormat !== 'string' || !SUPPORTED_FORMATS.includes(newFormat)) {
+                    errors.push(`Image can only be converted to ${SUPPORTED_FORMATS.join(', ')}`)
+                } else {
+                    transformer.toFormat(newFormat)
+                    transformLabels.push(`format:${newFormat}`)
                 }
             },
             grayscale: (val) => {
