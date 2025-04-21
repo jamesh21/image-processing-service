@@ -169,7 +169,6 @@ class ImagesService {
     // Extracts all transformations and adds them individually to sharp's transformer and also build the label for naming the new file.
     buildTransformer = (options) => {
         const transformLabels = [], transformer = sharp(), errors = ['Invalid input for the following transformatios']
-        console.log(options)
         // Lookup table, for different transformations
         const transformationMap = {
             rotate: (angle) => {

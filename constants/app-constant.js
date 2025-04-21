@@ -23,7 +23,7 @@ const API_TO_DB_MAPPING = {
 }
 
 const SUPPORTED_FORMATS = [
-    'jpeg', 'jpg', 'png', 'webp', 'avif', 'heif'
+    'jpeg', 'jpg', 'png', 'webp', 'avif'
 ]
 
 const FORMAT_MAPPING = {
