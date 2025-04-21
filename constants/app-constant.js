@@ -23,7 +23,16 @@ const API_TO_DB_MAPPING = {
 }
 
 const SUPPORTED_FORMATS = [
-    'jpeg', 'png', 'webp',
+    'jpeg', 'jpg', 'png', 'webp', 'avif'
 ]
 
-module.exports = { DB_TO_API_MAPPING, API_TO_DB_MAPPING, SUPPORTED_FORMATS }
+const FORMAT_MAPPING = {
+    jpeg: { ext: 'jpg', mime: 'image/jpeg' },
+    jpg: { ext: 'jpg', mime: 'image/jpeg' },
+    png: { ext: 'png', mime: 'image/png' },
+    webp: { ext: 'webp', mime: 'image/webp' },
+    avif: { ext: 'avif', mime: 'image/avif' },
+    heif: { ext: 'heif', mime: 'image/heif' },
+}
+
+module.exports = { DB_TO_API_MAPPING, API_TO_DB_MAPPING, SUPPORTED_FORMATS, FORMAT_MAPPING }
