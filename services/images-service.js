@@ -4,6 +4,8 @@ const sharp = require('sharp');
 const { BadRequestError, UnauthenticatedError, ForbiddenError } = require('../errors')
 const path = require('path')
 const { SUPPORTED_FORMATS, FORMAT_MAPPING } = require('../constants/app-constant')
+const { queueTransformationUp } = require('../producer')
+const TransformerService = require('./transformer-service')
 
 class ImagesService {
 
@@ -130,8 +132,12 @@ class ImagesService {
             }
 
             // extract transformation and create labels
-            const { transformLabels, transformer } = this.buildTransformer(transformations)
-
+            const transformerService = new TransformerService(transformations)
+            if (transformerService.hasErrors()) {
+                throw new BadRequestError(transformerService.getErrors().join(', '))
+            }
+            const transformLabels = transformerService.createLabels()
+            const transformer = transformerService.createTransformer(sharp())
             // retrieve original image name and file extension, this will be used when naming the transformed image.
             const { name: imageName, ext } = path.parse(imageDetailsFromDB.imageFileName)
 
@@ -141,14 +147,11 @@ class ImagesService {
             // retrieve actual image from s3 and perform transformations
             const image = await this.getImageFromS3(imageDetailsFromDB.imageS3Key)
 
-            //With this name, we can check cache
-            // TODO add to redis cache 
+            // TODO add to redis cache, With this name, we can check cache
 
             // apply transformations to image and create image buffer
             const transformedImgBuffer = await image.Body.pipe(transformer).toBuffer();
             const metadata = this.getFilteredMetadata(await sharp(transformedImgBuffer).metadata(), { transformations: transformLabels })
-
-            // is ext still needed?, can't we get it from metadata?
 
             // store in s3
             const imageKey = `images/${newImageName}.${FORMAT_MAPPING[metadata.format].ext}`
@@ -164,90 +167,6 @@ class ImagesService {
             throw error
         }
 
-    }
-
-    // Extracts all transformations and adds them individually to sharp's transformer and also build the label for naming the new file.
-    buildTransformer = (options) => {
-        const transformLabels = [], transformer = sharp(), errors = ['Invalid input for the following transformatios']
-        // Lookup table, for different transformations
-        const transformationMap = {
-            rotate: (angle) => {
-                if (typeof angle !== 'number') {
-                    errors.push('rotation must be a number')
-                } else {
-                    transformer.rotate(angle)
-                    transformLabels.push(`rotate${angle}`)
-                }
-            },
-            flip: (val) => {
-                if (typeof val !== 'boolean') {
-                    errors.push('flip must be a boolean')
-                } else if (val) {
-                    transformer.flip()
-                    transformLabels.push('flip')
-                }
-            },
-            resize: (options) => {
-                const { width, height } = options
-                if (typeof width !== 'number' || typeof height !== 'number') {
-                    errors.push('resize must include width and height as numbers')
-                } else {
-                    transformer.resize(options)
-                    transformLabels.push(`resize:w${options.width},h${options.height}`)
-                }
-            },
-            crop: (options) => {
-                const { width, height, top, left } = options
-                if (typeof width !== 'number' || typeof height !== 'number' || typeof left !== 'number' || typeof top !== 'number') {
-                    errors.push('crop must include width, height, top, left as numbers')
-                } else {
-                    transformer.extract(options)
-                    transformLabels.push(`crop:w${options.width},h${options.height},top${options.top},left${options.left}`)
-                }
-            },
-            format: (newFormat) => {
-                if (typeof newFormat !== 'string' || !SUPPORTED_FORMATS.includes(newFormat)) {
-                    errors.push(`Image can only be converted to ${SUPPORTED_FORMATS.join(', ')}`)
-                } else {
-                    transformer.toFormat(newFormat)
-                    transformLabels.push(`format:${newFormat}`)
-                }
-            },
-            grayscale: (val) => {
-                if (typeof val !== 'boolean') {
-                    errors.push('grayscale must be a boolean')
-                } else if (val) {
-                    transformer.grayscale()
-                    transformLabels.push('grayscale')
-                }
-            },
-            sepia: (val) => {
-                if (typeof val !== 'boolean') {
-                    errors.push('sepia must be a boolean')
-                } else if (val) {
-                    transformer.recomb([
-                        [0.393, 0.769, 0.189],
-                        [0.349, 0.686, 0.168],
-                        [0.272, 0.534, 0.131]
-                    ])
-                    transformLabels.push('sepia')
-                }
-            }
-        }
-
-        // Loop through each transsformation and create the label and add to transformer object
-        for (const [key, value] of Object.entries(options)) {
-            const transformFn = transformationMap[key]
-            if (transformFn) {
-                transformFn(value)
-            }
-        }
-
-        // Check if errors came up
-        if (errors.length > 1) {
-            throw new BadRequestError(errors.join(', '))
-        }
-        return { transformer, transformLabels }
     }
 
     buildImageUrl = (imageId) => {
