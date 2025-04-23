@@ -40,7 +40,8 @@ class ImagesService {
             await this.uploadImageToS3(buffer, imageKey, FORMAT_MAPPING[expectedType].mime)
 
             // Using s3 key, add to DB
-            const addedImageData = await this.addImageToDB(userId, imageKey, fileName, FORMAT_MAPPING[expectedType].mime)
+            // const addedImageData = await this.addImageToDB(userId, imageKey, fileName, FORMAT_MAPPING[expectedType].mime)
+            const addedImageData = await imageModel.addImageToDB({ 'user_id': userId, 'image_s3_key': imageKey, 'image_file_name': fileName, 'mime_type': FORMAT_MAPPING[expectedType].mime, 'status': 'ready' })
 
             // build api url for retrieving image
             const url = this.buildImageUrl(addedImageData.imageId)
@@ -131,37 +132,27 @@ class ImagesService {
                 throw new ForbiddenError('User cannot access this image')
             }
 
-            // extract transformation and create labels
+            // Check if transformations have any errors
             const transformerService = new TransformerService(transformations)
             if (transformerService.hasErrors()) {
                 throw new BadRequestError(transformerService.getErrors().join(', '))
             }
-            const transformLabels = transformerService.createLabels()
-            const transformer = transformerService.createTransformer(sharp())
-            // retrieve original image name and file extension, this will be used when naming the transformed image.
-            const { name: imageName, ext } = path.parse(imageDetailsFromDB.imageFileName)
 
-            // New image name with old name and transformations performed
-            const newImageName = `${imageName}_${transformLabels.join('_')}`
+            // create row in db for rabbitmq to populate later
+            // const addedImageData = await this.addImageToDB(userId)
+            const addedImageData = await imageModel.addImageToDB({ 'user_id': userId })
 
-            // retrieve actual image from s3 and perform transformations
-            const image = await this.getImageFromS3(imageDetailsFromDB.imageS3Key)
+            // Send transformation information to rabbitmq
+            queueTransformationUp(imageDetailsFromDB.imageFileName, imageDetailsFromDB.imageS3Key, addedImageData.imageId, transformations)
+
 
             // TODO add to redis cache, With this name, we can check cache
 
-            // apply transformations to image and create image buffer
-            const transformedImgBuffer = await image.Body.pipe(transformer).toBuffer();
-            const metadata = this.getFilteredMetadata(await sharp(transformedImgBuffer).metadata(), { transformations: transformLabels })
-
-            // store in s3
-            const imageKey = `images/${newImageName}.${FORMAT_MAPPING[metadata.format].ext}`
-            await this.uploadImageToS3(transformedImgBuffer, imageKey, FORMAT_MAPPING[metadata.format].mime)
-
-            // store in db
-            const addedImageData = await this.addImageToDB(userId, imageKey, `${newImageName}${ext}`, image.ContentType)
+            // create dummy url first for user to access when image transformation is finished processing
             const url = this.buildImageUrl(addedImageData.imageId)
 
-            return { url, metadata }
+            // return { url, metadata }
+            return { url }
 
         } catch (error) {
             throw error
@@ -232,6 +223,7 @@ class ImagesService {
         try {
             return await s3Service.getImage(imageKey)
         } catch (error) {
+            console.error(error.message)
             throw new Error(`Failed to retrieve image from s3 for ${imageKey}`)
         }
     }

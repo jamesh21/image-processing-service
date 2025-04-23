@@ -1,5 +1,5 @@
 const { SUPPORTED_FORMATS } = require('../constants/app-constant')
-
+const sharp = require('sharp');
 class TransformerService {
     static transformationsMap = {
         rotate: {
@@ -111,6 +111,7 @@ class TransformerService {
         this.options = options
         this.errors = ['Invalid input for the following transformatios']
         this.validate()
+        this.sharpInstance = sharp()
     }
 
     createLabels = () => {
@@ -143,8 +144,8 @@ class TransformerService {
         }
     }
 
-    createTransformer = (sharpInstance) => {
-        let transformer = sharpInstance
+    createTransformer = () => {
+        let transformer = this.sharpInstance
         for (const key in this.options) {
             const optionVal = this.options[key]
             const transformationHandler = TransformerService.transformationsMap[key]
