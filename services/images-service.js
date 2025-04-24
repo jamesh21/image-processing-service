@@ -4,6 +4,8 @@ const sharp = require('sharp');
 const { BadRequestError, UnauthenticatedError, ForbiddenError } = require('../errors')
 const path = require('path')
 const { SUPPORTED_FORMATS, FORMAT_MAPPING } = require('../constants/app-constant')
+const { queueTransformationUp } = require('../producer')
+const TransformerService = require('./transformer-service')
 
 class ImagesService {
 
@@ -35,10 +37,19 @@ class ImagesService {
             const imageKey = `images/${fileName}`
 
             // upload image to s3
-            await this.uploadImageToS3(buffer, imageKey, FORMAT_MAPPING[expectedType].mime)
+            await s3Service.uploadFile(buffer, imageKey, FORMAT_MAPPING[expectedType].mime)
 
             // Using s3 key, add to DB
-            const addedImageData = await this.addImageToDB(userId, imageKey, fileName, FORMAT_MAPPING[expectedType].mime)
+            // const addedImageData = await this.addImageToDB(userId, imageKey, fileName, FORMAT_MAPPING[expectedType].mime)
+            const addedImageData = await imageModel.addImageToDB(
+                {
+                    'user_id': userId,
+                    'image_s3_key': imageKey,
+                    'image_file_name': fileName,
+                    'mime_type': FORMAT_MAPPING[expectedType].mime,
+                    'status': 'ready'
+                }
+            )
 
             // build api url for retrieving image
             const url = this.buildImageUrl(addedImageData.imageId)
@@ -94,7 +105,7 @@ class ImagesService {
                 throw new ForbiddenError('User cannot access this image')
             }
             // Retrieves image stream from s3
-            const { Body } = await this.getImageFromS3(image.imageS3Key)
+            const { Body } = await s3Service.getImage(image.imageS3Key)
 
             if (format) {
                 const { transformer } = this.buildTransformer({ format })
@@ -129,125 +140,32 @@ class ImagesService {
                 throw new ForbiddenError('User cannot access this image')
             }
 
-            // extract transformation and create labels
-            const { transformLabels, transformer } = this.buildTransformer(transformations)
+            // Check if transformations have any errors
+            const errors = TransformerService.validate(transformations)
+            if (errors.length > 1) {
+                throw new BadRequestError(errors.join(', '))
+            }
 
-            // retrieve original image name and file extension, this will be used when naming the transformed image.
-            const { name: imageName, ext } = path.parse(imageDetailsFromDB.imageFileName)
+            // create row in db for rabbitmq to populate later
+            // const addedImageData = await this.addImageToDB(userId)
+            const addedImageData = await imageModel.addImageToDB({ 'user_id': userId }) // this will fail, when 
 
-            // New image name with old name and transformations performed
-            const newImageName = `${imageName}_${transformLabels.join('_')}`
+            // Send transformation information to rabbitmq
+            queueTransformationUp(imageDetailsFromDB.imageFileName, imageDetailsFromDB.imageS3Key, addedImageData.imageId, transformations)
 
-            // retrieve actual image from s3 and perform transformations
-            const image = await this.getImageFromS3(imageDetailsFromDB.imageS3Key)
 
-            //With this name, we can check cache
-            // TODO add to redis cache 
+            // TODO add to redis cache, With this name, we can check cache
 
-            // apply transformations to image and create image buffer
-            const transformedImgBuffer = await image.Body.pipe(transformer).toBuffer();
-            const metadata = this.getFilteredMetadata(await sharp(transformedImgBuffer).metadata(), { transformations: transformLabels })
-
-            // is ext still needed?, can't we get it from metadata?
-
-            // store in s3
-            const imageKey = `images/${newImageName}.${FORMAT_MAPPING[metadata.format].ext}`
-            await this.uploadImageToS3(transformedImgBuffer, imageKey, FORMAT_MAPPING[metadata.format].mime)
-
-            // store in db
-            const addedImageData = await this.addImageToDB(userId, imageKey, `${newImageName}${ext}`, image.ContentType)
+            // create dummy url first for user to access when image transformation is finished processing
             const url = this.buildImageUrl(addedImageData.imageId)
 
-            return { url, metadata }
+            // return { url, metadata }
+            return { url }
 
         } catch (error) {
             throw error
         }
 
-    }
-
-    // Extracts all transformations and adds them individually to sharp's transformer and also build the label for naming the new file.
-    buildTransformer = (options) => {
-        const transformLabels = [], transformer = sharp(), errors = ['Invalid input for the following transformatios']
-        // Lookup table, for different transformations
-        const transformationMap = {
-            rotate: (angle) => {
-                if (typeof angle !== 'number') {
-                    errors.push('rotation must be a number')
-                } else {
-                    transformer.rotate(angle)
-                    transformLabels.push(`rotate${angle}`)
-                }
-            },
-            flip: (val) => {
-                if (typeof val !== 'boolean') {
-                    errors.push('flip must be a boolean')
-                } else if (val) {
-                    transformer.flip()
-                    transformLabels.push('flip')
-                }
-            },
-            resize: (options) => {
-                const { width, height } = options
-                if (typeof width !== 'number' || typeof height !== 'number') {
-                    errors.push('resize must include width and height as numbers')
-                } else {
-                    transformer.resize(options)
-                    transformLabels.push(`resize:w${options.width},h${options.height}`)
-                }
-            },
-            crop: (options) => {
-                const { width, height, top, left } = options
-                if (typeof width !== 'number' || typeof height !== 'number' || typeof left !== 'number' || typeof top !== 'number') {
-                    errors.push('crop must include width, height, top, left as numbers')
-                } else {
-                    transformer.extract(options)
-                    transformLabels.push(`crop:w${options.width},h${options.height},top${options.top},left${options.left}`)
-                }
-            },
-            format: (newFormat) => {
-                if (typeof newFormat !== 'string' || !SUPPORTED_FORMATS.includes(newFormat)) {
-                    errors.push(`Image can only be converted to ${SUPPORTED_FORMATS.join(', ')}`)
-                } else {
-                    transformer.toFormat(newFormat)
-                    transformLabels.push(`format:${newFormat}`)
-                }
-            },
-            grayscale: (val) => {
-                if (typeof val !== 'boolean') {
-                    errors.push('grayscale must be a boolean')
-                } else if (val) {
-                    transformer.grayscale()
-                    transformLabels.push('grayscale')
-                }
-            },
-            sepia: (val) => {
-                if (typeof val !== 'boolean') {
-                    errors.push('sepia must be a boolean')
-                } else if (val) {
-                    transformer.recomb([
-                        [0.393, 0.769, 0.189],
-                        [0.349, 0.686, 0.168],
-                        [0.272, 0.534, 0.131]
-                    ])
-                    transformLabels.push('sepia')
-                }
-            }
-        }
-
-        // Loop through each transsformation and create the label and add to transformer object
-        for (const [key, value] of Object.entries(options)) {
-            const transformFn = transformationMap[key]
-            if (transformFn) {
-                transformFn(value)
-            }
-        }
-
-        // Check if errors came up
-        if (errors.length > 1) {
-            throw new BadRequestError(errors.join(', '))
-        }
-        return { transformer, transformLabels }
     }
 
     buildImageUrl = (imageId) => {
@@ -261,18 +179,6 @@ class ImagesService {
             width: fullMetaData.width,
             height: fullMetaData.height,
             ...customFields
-        }
-    }
-
-    uploadImageToS3 = async (buffer, imageKey, mimeType) => {
-        try {
-            return await s3Service.uploadFile({
-                buffer: buffer,
-                key: imageKey,
-                mimetype: mimeType
-            })
-        } catch (error) {
-            throw new Error(`Failed to upload image with key ${imageKey} to S3: ${error.message}`)
         }
     }
 
@@ -307,13 +213,6 @@ class ImagesService {
             return await imageModel.getImageFromDB(imageId)
         } catch (error) {
             throw new Error(`Failed to retrieve image from DB for image id ${imageId}`)
-        }
-    }
-    getImageFromS3 = async (imageKey) => {
-        try {
-            return await s3Service.getImage(imageKey)
-        } catch (error) {
-            throw new Error(`Failed to retrieve image from s3 for ${imageKey}`)
         }
     }
 }

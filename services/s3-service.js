@@ -19,9 +19,14 @@ class S3Service {
             Body: buffer,
             ContentType: mimetype
         };
+        try {
+            const command = new PutObjectCommand(uploadParams)
+            await this.s3.send(command)
+        } catch (error) {
+            console.error(error.message)
+            throw new Error(`Failed to upload file with key ${imageKey} to S3`)
+        }
 
-        const command = new PutObjectCommand(uploadParams)
-        await this.s3.send(command)
     }
 
     getImage(s3Key) {
@@ -29,8 +34,14 @@ class S3Service {
             Bucket: this.bucketName,
             Key: s3Key
         }
-        const command = new GetObjectCommand(input)
-        return this.s3.send(command)
+        try {
+            const command = new GetObjectCommand(input)
+            return this.s3.send(command)
+        } catch (error) {
+            console.error(error.message)
+            throw new Error(`Failed to retrieve file from S3 for ${s3Key}`)
+        }
+
     }
 
     deleteImage(s3Key) {

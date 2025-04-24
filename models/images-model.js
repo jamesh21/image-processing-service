@@ -12,9 +12,19 @@ class ImagesModel {
      * @param {*} mimetype 
      * @returns The created image row
      */
-    addImageToDB = async (userId, imageUrl, fileName, mimetype) => {
+    addImageToDB = async (data) => {
+        const columns = [], values = [], placeholders = []
+
+        let i = 1
+        for (const [field, value] of Object.entries(data)) {
+            columns.push(field)
+            values.push(value)
+            placeholders.push(`$${i}`)
+            i++
+        }
         // Try catch for db queries?
-        const addedImage = await pool.query('INSERT INTO images (user_id, image_s3_key, image_file_name, mime_type) VALUES ($1, $2, $3, $4) RETURNING *', [userId, imageUrl, fileName, mimetype])
+        const sqlStatement = `INSERT INTO images (${columns.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`
+        const addedImage = await pool.query(sqlStatement, values)
 
         if (addedImage.rowCount === 0) {
             throw Error('Could not create image entry in DB')
@@ -23,6 +33,28 @@ class ImagesModel {
         return transformFields(addedImage.rows[0], DB_TO_API_MAPPING)
     }
 
+    updateImageInDB = async (imageId, data) => {
+        const setStatements = [], values = []
+
+        let i = 1
+        for (const [field, value] of Object.entries(data)) {
+            setStatements.push(`${field}=$${i}`)
+            values.push(value)
+            i++
+        }
+        values.push(imageId)
+        const sqlStatement = `UPDATE images SET ${setStatements.join(', ')} WHERE image_id = $${i} RETURNING *`
+        try {
+            const updatedImage = await pool.query(sqlStatement, values)
+            if (updatedImage.rowCount === 0) {
+                throw new Error(`Image could not be updated for image id ${imageId}`)
+            }
+            return transformFields(updatedImage.rows[0], DB_TO_API_MAPPING)
+        } catch (error) {
+            throw error
+        }
+
+    }
     /**
      * Retrieves images for user in DB
      * @param {*} userId 
