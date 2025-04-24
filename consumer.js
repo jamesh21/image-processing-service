@@ -26,9 +26,9 @@ async function startConsumer() {
             const { oldImageFileName, originalImageS3Key, newImageId, transformations } = job
 
             // extract transformation and create labels
-            const transformerService = new TransformerService(transformations)
-            const transformLabels = transformerService.createLabels()
-            const transformer = transformerService.createTransformer()
+
+            const transformLabels = TransformerService.createLabels(transformations)
+            const transformer = TransformerService.createTransformer(transformations)
 
 
             // retrieve actual image from s3 and perform transformations

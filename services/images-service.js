@@ -37,11 +37,19 @@ class ImagesService {
             const imageKey = `images/${fileName}`
 
             // upload image to s3
-            await this.uploadImageToS3(buffer, imageKey, FORMAT_MAPPING[expectedType].mime)
+            await s3Service.uploadFile(buffer, imageKey, FORMAT_MAPPING[expectedType].mime)
 
             // Using s3 key, add to DB
             // const addedImageData = await this.addImageToDB(userId, imageKey, fileName, FORMAT_MAPPING[expectedType].mime)
-            const addedImageData = await imageModel.addImageToDB({ 'user_id': userId, 'image_s3_key': imageKey, 'image_file_name': fileName, 'mime_type': FORMAT_MAPPING[expectedType].mime, 'status': 'ready' })
+            const addedImageData = await imageModel.addImageToDB(
+                {
+                    'user_id': userId,
+                    'image_s3_key': imageKey,
+                    'image_file_name': fileName,
+                    'mime_type': FORMAT_MAPPING[expectedType].mime,
+                    'status': 'ready'
+                }
+            )
 
             // build api url for retrieving image
             const url = this.buildImageUrl(addedImageData.imageId)
@@ -97,7 +105,7 @@ class ImagesService {
                 throw new ForbiddenError('User cannot access this image')
             }
             // Retrieves image stream from s3
-            const { Body } = await this.getImageFromS3(image.imageS3Key)
+            const { Body } = await s3Service.getImage(image.imageS3Key)
 
             if (format) {
                 const { transformer } = this.buildTransformer({ format })
@@ -133,14 +141,14 @@ class ImagesService {
             }
 
             // Check if transformations have any errors
-            const transformerService = new TransformerService(transformations)
-            if (transformerService.hasErrors()) {
-                throw new BadRequestError(transformerService.getErrors().join(', '))
+            const errors = TransformerService.validate(transformations)
+            if (errors.length > 1) {
+                throw new BadRequestError(errors.join(', '))
             }
 
             // create row in db for rabbitmq to populate later
             // const addedImageData = await this.addImageToDB(userId)
-            const addedImageData = await imageModel.addImageToDB({ 'user_id': userId })
+            const addedImageData = await imageModel.addImageToDB({ 'user_id': userId }) // this will fail, when 
 
             // Send transformation information to rabbitmq
             queueTransformationUp(imageDetailsFromDB.imageFileName, imageDetailsFromDB.imageS3Key, addedImageData.imageId, transformations)
@@ -171,18 +179,6 @@ class ImagesService {
             width: fullMetaData.width,
             height: fullMetaData.height,
             ...customFields
-        }
-    }
-
-    uploadImageToS3 = async (buffer, imageKey, mimeType) => {
-        try {
-            return await s3Service.uploadFile({
-                buffer: buffer,
-                key: imageKey,
-                mimetype: mimeType
-            })
-        } catch (error) {
-            throw new Error(`Failed to upload image with key ${imageKey} to S3: ${error.message}`)
         }
     }
 
@@ -217,14 +213,6 @@ class ImagesService {
             return await imageModel.getImageFromDB(imageId)
         } catch (error) {
             throw new Error(`Failed to retrieve image from DB for image id ${imageId}`)
-        }
-    }
-    getImageFromS3 = async (imageKey) => {
-        try {
-            return await s3Service.getImage(imageKey)
-        } catch (error) {
-            console.error(error.message)
-            throw new Error(`Failed to retrieve image from s3 for ${imageKey}`)
         }
     }
 }

@@ -107,17 +107,11 @@ class TransformerService {
         }
     }
 
-    constructor(options) {
-        this.options = options
-        this.errors = ['Invalid input for the following transformatios']
-        this.validate()
-        this.sharpInstance = sharp()
-    }
 
-    createLabels = () => {
+    static createLabels = (options) => {
         const labels = []
-        for (const key in this.options) {
-            const optionVal = this.options[key]
+        for (const key in options) {
+            const optionVal = options[key]
             const transformationHandler = TransformerService.transformationsMap[key]
             if (transformationHandler?.label) {
                 const label = transformationHandler.label(optionVal)
@@ -129,38 +123,33 @@ class TransformerService {
         return labels
     }
 
-    validate = () => {
-        for (const key in this.options) {
-            const optionVal = this.options[key]
+    static validate = (options) => {
+        const errors = ['Invalid input for the following transformatios']
+        for (const key in options) {
+            const optionVal = options[key]
             const transformationHandler = TransformerService.transformationsMap[key]
             if (transformationHandler?.validate) {
                 const error = transformationHandler.validate(optionVal)
                 if (error) {
-                    this.errors.push(error)
+                    errors.push(error)
                 }
             } else {
-                this.errors.push(`Unsupported transformation ${key}`)
+                errors.push(`Unsupported transformation ${key}`)
             }
         }
+        return errors
     }
 
-    createTransformer = () => {
-        let transformer = this.sharpInstance
-        for (const key in this.options) {
-            const optionVal = this.options[key]
+    static createTransformer = (options) => {
+        let transformer = sharp()
+        for (const key in options) {
+            const optionVal = options[key]
             const transformationHandler = TransformerService.transformationsMap[key]
             if (transformationHandler?.apply) {
                 transformer = transformationHandler.apply(transformer, optionVal)
             }
         }
         return transformer
-    }
-
-    getErrors = () => {
-        return this.errors
-    }
-    hasErrors = () => {
-        return this.errors.length > 1
     }
 }
 
