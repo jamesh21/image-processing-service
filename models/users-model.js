@@ -1,38 +1,52 @@
-const pool = require('../services/db-service')
-const { DB_TO_API_MAPPING } = require('../constants/app-constant')
-const { DB_DUP_ENTRY } = require('../constants/errors-constant')
-const { transformFields } = require('../utils/field-mapper-util')
-const { ConflictError, NotFoundError } = require('../errors')
-
-
 class UserModel {
-    createNewUserInDB = async (email, password, fullName) => {
-        try {
-            const newUser = await pool.query('INSERT INTO users (email_address, password_hash, full_name) VALUES ($1, $2, $3) RETURNING *', [email, password, fullName])
-            if (newUser.rowCount === 0) {
-                throw new Error('User could not be created, try again later')
-            }
-            return transformFields(newUser.rows[0], DB_TO_API_MAPPING)
-        } catch (err) {
-            if (err.code === DB_DUP_ENTRY) {
-                throw new ConflictError('Email already exists')
-            }
-        }
 
+    static get apiToDbFieldMap() {
+        return {
+            userId: 'user_id',
+            email: 'email_address',
+            name: 'full_name',
+            password: 'password_hash'
+        }
     }
 
-    /**
-     * Retrieves specific users from users table, This will also return hashed password.
-     * @param {*} email 
-     * @returns 
-     */
-    getUserFromDB = async (email) => {
-        const user = await pool.query('SELECT * FROM users WHERE email_address = ($1)', [email])
-        if (user.rowCount === 0) {
-            throw new NotFoundError('User was not found')
+    static get dbToApiFieldMap() {
+        return {
+            email_address: 'email',
+            full_name: 'name',
+            user_id: 'userId',
+            password_hash: 'password'
         }
-        return transformFields(user.rows[0], DB_TO_API_MAPPING)
+    }
+
+    static get tableName() {
+        return 'users'
+    }
+
+    static fromDb(row) {
+        if (!row) {
+            return null
+        }
+        return {
+            userId: row.user_id,
+            email: row.email_address,
+            name: row.full_name,
+            password: row.password_hash
+        }
+    }
+
+    // Converts user object as api format to db format to prepare to be used with db queries
+    static toDb(user) {
+        const result = {}
+        const fieldMap = this.apiToDbFieldMap
+        // loop through user fields and assign them to the corresponding dbField
+        for (const [key, value] of Object.entries(user)) {
+            const dbField = fieldMap[key]
+            if (dbField) { // only include fields that are in fieldmap
+                result[dbField] = value
+            }
+        }
+        return result
     }
 }
 
-module.exports = new UserModel()
+module.exports = UserModel
