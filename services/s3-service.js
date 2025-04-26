@@ -19,12 +19,13 @@ class S3Service {
             Body: buffer,
             ContentType: mimetype
         };
+
         try {
             const command = new PutObjectCommand(uploadParams)
             await this.s3.send(command)
         } catch (error) {
             console.error(error.message)
-            throw new Error(`Failed to upload file with key ${imageKey} to S3`)
+            throw new Error(`Failed to upload file with key ${key} to S3`)
         }
 
     }

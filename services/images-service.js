@@ -1,5 +1,5 @@
 const s3Service = require('./s3-service')
-const imageModel = require('../models/images-model')
+const imageRepository = require('../repository/images-repository')
 const sharp = require('sharp');
 const { BadRequestError, UnauthenticatedError, ForbiddenError } = require('../errors')
 const path = require('path')
@@ -34,19 +34,23 @@ class ImagesService {
                 metadata = this.getFilteredMetadata(await this.getMetaData(buffer))
             }
 
-            const imageKey = `images/${fileName}`
+            const imageS3Key = `images/${fileName}`
 
             // upload image to s3
-            await s3Service.uploadFile(buffer, imageKey, FORMAT_MAPPING[expectedType].mime)
+            await s3Service.uploadFile({
+                buffer,
+                key: imageS3Key,
+                mimetype: FORMAT_MAPPING[expectedType].mime
+            })
 
             // Using s3 key, add to DB
             // const addedImageData = await this.addImageToDB(userId, imageKey, fileName, FORMAT_MAPPING[expectedType].mime)
-            const addedImageData = await imageModel.addImageToDB(
+            const addedImageData = await imageRepository.addImageToDB(
                 {
-                    'user_id': userId,
-                    'image_s3_key': imageKey,
-                    'image_file_name': fileName,
-                    'mime_type': FORMAT_MAPPING[expectedType].mime,
+                    userId,
+                    imageS3Key,
+                    'imageFileName': fileName,
+                    'mimeType': FORMAT_MAPPING[expectedType].mime,
                     'status': 'ready'
                 }
             )
@@ -68,13 +72,13 @@ class ImagesService {
         let images;
 
         if (!limit) {
-            images = await imageModel.getUserImagesFromDB(userId)
+            images = await imageRepository.getUserImagesFromDB(userId)
         } else {
             if (!parseInt(limit) || !parseInt(page)) {
                 throw new BadRequestError('Limit and page must be passed in as a number')
             }
             const offset = (page - 1) * limit
-            images = await imageModel.getUserPaginatedImagesFromDB(userId, offset, limit)
+            images = await imageRepository.getUserPaginatedImagesFromDB(userId, offset, limit)
         }
 
         // build url of images
@@ -148,7 +152,7 @@ class ImagesService {
 
             // create row in db for rabbitmq to populate later
             // const addedImageData = await this.addImageToDB(userId)
-            const addedImageData = await imageModel.addImageToDB({ 'user_id': userId }) // this will fail, when 
+            const addedImageData = await imageRepository.addImageToDB({ userId }) // this will fail, when 
 
             // Send transformation information to rabbitmq
             queueTransformationUp(imageDetailsFromDB.imageFileName, imageDetailsFromDB.imageS3Key, addedImageData.imageId, transformations)
@@ -192,7 +196,7 @@ class ImagesService {
 
     addImageToDB = async (userId, imageKey, fileName, mimeType) => {
         try {
-            return await imageModel.addImageToDB(userId, imageKey, fileName, mimeType)
+            return await imageRepository.addImageToDB(userId, imageKey, fileName, mimeType)
         } catch (error) {
             try {
                 // Rollback entry in s3
@@ -210,7 +214,7 @@ class ImagesService {
     }
     getImageFromDB = async (imageId) => {
         try {
-            return await imageModel.getImageFromDB(imageId)
+            return await imageRepository.getImageFromDB(imageId)
         } catch (error) {
             throw new Error(`Failed to retrieve image from DB for image id ${imageId}`)
         }

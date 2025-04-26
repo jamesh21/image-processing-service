@@ -2,7 +2,7 @@ require("dotenv").config();
 const amqp = require("amqplib");
 const TransformerService = require('./services/transformer-service')
 const s3Service = require('./services/s3-service')
-const imageModel = require('./models/images-model')
+const imageRepository = require('./repository/images-repository')
 const { FORMAT_MAPPING } = require('./constants/app-constant')
 const sharp = require('sharp')
 const path = require('path')
@@ -48,19 +48,19 @@ async function startConsumer() {
 
             console.log(`Uploading image key ${imageKey} to s3`)
 
-            await s3Service.uploadFile(transformedImgBuffer, imageKey, FORMAT_MAPPING[metadata.format].mime)
+            await s3Service.uploadFile({ buffer: transformedImgBuffer, key: imageKey, mimetype: FORMAT_MAPPING[metadata.format].mime })
 
             console.log(`Successfully uploaded image key ${imageKey} to s3`)
             console.log(`Updating image details for image id ${newImageId} in DB`)
 
-            await imageModel.updateImageInDB(newImageId, { 'image_s3_key': imageKey, 'image_file_name': newImageName, 'mime_type': FORMAT_MAPPING[metadata.format].mime, 'status': 'ready' })
+            await imageRepository.updateImageInDB(newImageId, { 'imageS3Key': imageKey, 'imageFileName': newImageName, 'mimeType': FORMAT_MAPPING[metadata.format].mime, 'status': 'ready' })
 
             console.log(`Successfully updated image details for image id ${newImageId} in DB`)
             channel.ack(msg); // ✅ Acknowledge successful processing
         } catch (err) {
             console.error("Error processing job:", err);
             // update image in db to failed
-            await imageModel.updateImageInDB(newImageId, { 'status': 'failed' })
+            await imageRepository.updateImageInDB(newImageId, { 'status': 'failed' })
             channel.nack(msg, false, false); // ❌ Discard the message (or send to DLQ)
         }
     });
