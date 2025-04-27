@@ -1,7 +1,7 @@
 const s3Service = require('./s3-service')
 const imageRepository = require('../repository/images-repository')
 const sharp = require('sharp');
-const { BadRequestError, UnauthenticatedError, ForbiddenError } = require('../errors')
+const { BadRequestError, UnauthenticatedError, ForbiddenError, NotFoundError } = require('../errors')
 const path = require('path')
 const { SUPPORTED_FORMATS, FORMAT_MAPPING } = require('../constants/app-constant')
 const { queueTransformationUp } = require('../producer')
@@ -214,8 +214,16 @@ class ImagesService {
     }
     getImageFromDB = async (imageId) => {
         try {
-            return await imageRepository.getImageFromDB(imageId)
+            const image = await imageRepository.getImageFromDB(imageId)
+            if (!image) {
+                throw new NotFoundError(`Image was not found for image id ${imageId}`)
+            }
+            return image
         } catch (error) {
+            if (error instanceof NotFoundError) {
+                console.log('Entered this error block')
+                throw error
+            }
             throw new Error(`Failed to retrieve image from DB for image id ${imageId}`)
         }
     }

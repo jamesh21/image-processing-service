@@ -1,6 +1,6 @@
 const pool = require('../services/db-service')
 const { DB_DUP_ENTRY } = require('../constants/errors-constant')
-const { ConflictError, NotFoundError } = require('../errors')
+const { ConflictError } = require('../errors')
 const UserModel = require('..//models/users-model')
 
 class UserRepository {
@@ -33,9 +33,7 @@ class UserRepository {
      */
     getUserFromDB = async (email) => {
         const user = await pool.query(`SELECT * FROM ${UserModel.tableName} WHERE email_address = ($1)`, [email])
-        if (user.rowCount === 0) {
-            throw new NotFoundError('User was not found')
-        }
+
         return UserModel.fromDb(user.rows[0])
     }
 }

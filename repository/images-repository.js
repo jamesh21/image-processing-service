@@ -1,6 +1,6 @@
 const pool = require('../services/db-service')
 const ImageModel = require('../models/images-model')
-const { NotFoundError } = require('../errors')
+
 
 class ImageRepository {
     /**
@@ -75,9 +75,7 @@ class ImageRepository {
      */
     getImageFromDB = async (imageId) => {
         const image = await pool.query(`SELECT * FROM ${ImageModel.tableName} WHERE image_id=($1)`, [imageId])
-        if (image.rowCount === 0) {
-            throw new NotFoundError(`Image was not found for image id ${imageId}`)
-        }
+
         // transform fields from DB format to API format
         return ImageModel.fromDb(image.rows[0])
     }
