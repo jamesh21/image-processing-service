@@ -221,7 +221,6 @@ class ImagesService {
             return image
         } catch (error) {
             if (error instanceof NotFoundError) {
-                console.log('Entered this error block')
                 throw error
             }
             throw new Error(`Failed to retrieve image from DB for image id ${imageId}`)

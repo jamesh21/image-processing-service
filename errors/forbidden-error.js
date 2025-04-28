@@ -1,9 +1,10 @@
 const { StatusCodes } = require('http-status-codes')
+const AppError = require('./app-error')
 
-class ForbiddenError extends Error {
+class ForbiddenError extends AppError {
     constructor(message) {
-        super(message)
-        this.statusCode = StatusCodes.FORBIDDEN
+        super(message, StatusCodes.FORBIDDEN)
+
     }
 }
 
