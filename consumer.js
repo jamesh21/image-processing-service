@@ -20,16 +20,13 @@ async function startConsumer() {
 
     channel.consume(queue, async (msg) => {
         if (!msg) return;
+        const job = JSON.parse(msg.content.toString());
+        const { oldImageFileName, originalImageS3Key, newImageId, transformations } = job
 
+        // extract transformation and create labels
+        const transformLabels = TransformerService.createLabels(transformations)
+        const transformer = TransformerService.createTransformer(transformations)
         try {
-            const job = JSON.parse(msg.content.toString());
-            const { oldImageFileName, originalImageS3Key, newImageId, transformations } = job
-
-            // extract transformation and create labels
-
-            const transformLabels = TransformerService.createLabels(transformations)
-            const transformer = TransformerService.createTransformer(transformations)
-
 
             // retrieve actual image from s3 and perform transformations
             const image = await s3Service.getImage(originalImageS3Key)
@@ -43,8 +40,6 @@ async function startConsumer() {
 
             const metadata = await sharp(transformedImgBuffer).metadata()
             const imageKey = `images/${newImageName}.${FORMAT_MAPPING[metadata.format].ext}`
-
-
 
             console.log(`Uploading image key ${imageKey} to s3`)
 

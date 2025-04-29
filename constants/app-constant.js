@@ -12,4 +12,9 @@ const FORMAT_MAPPING = {
     heif: { ext: 'heif', mime: 'image/heif' },
 }
 
-module.exports = { SUPPORTED_FORMATS, FORMAT_MAPPING }
+const IMAGE_STATUS = {
+    ready: 'ready',
+    processing: 'processing',
+    failed: 'failed'
+}
+module.exports = { SUPPORTED_FORMATS, FORMAT_MAPPING, IMAGE_STATUS }

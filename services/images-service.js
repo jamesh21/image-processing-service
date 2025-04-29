@@ -3,7 +3,7 @@ const imageRepository = require('../repository/images-repository')
 const sharp = require('sharp');
 const { BadRequestError, UnauthenticatedError, ForbiddenError, NotFoundError, AppError } = require('../errors')
 const path = require('path')
-const { SUPPORTED_FORMATS, FORMAT_MAPPING } = require('../constants/app-constant')
+const { SUPPORTED_FORMATS, FORMAT_MAPPING, IMAGE_STATUS } = require('../constants/app-constant')
 const { queueTransformationUp } = require('../producer')
 const TransformerService = require('./transformer-service');
 const { DatabaseError } = require('../errors')
@@ -44,7 +44,7 @@ class ImagesService {
             })
 
             // Using s3 key, add to DB
-            const addedImageData = await imageRepository.addImageToDB({ userId, imageS3Key, imageFileName: fileName, mimeType: FORMAT_MAPPING[expectedType].mime, status: 'ready' })
+            const addedImageData = await imageRepository.addImageToDB({ userId, imageS3Key, imageFileName: fileName, mimeType: FORMAT_MAPPING[expectedType].mime, status: IMAGE_STATUS.ready })
 
             // build api url for retrieving image
             const url = this.buildImageUrl(addedImageData.imageId)
@@ -107,6 +107,9 @@ class ImagesService {
         if (userId !== image.userId) {
             throw new ForbiddenError('User cannot access this image')
         }
+        if (image.status !== IMAGE_STATUS.ready) {
+            throw new BadRequestError('Image is not ready to be viewed')
+        }
         // Retrieves image stream from s3
         const { Body } = await s3Service.getImage(image.imageS3Key)
 
@@ -151,19 +154,15 @@ class ImagesService {
         }
 
         // create row in db for rabbitmq to populate later
-        const addedImageData = await imageRepository.addImageToDB({ userId }) // this will fail, when 
+        const addedImageData = await imageRepository.addImageToDB({ userId })
 
         // Send transformation information to rabbitmq
         queueTransformationUp(imageDetailsFromDB.imageFileName, imageDetailsFromDB.imageS3Key, addedImageData.imageId, transformations)
 
-        // TODO add to redis cache, With this name, we can check cache
 
         // create dummy url first for user to access when image transformation is finished processing
         const url = this.buildImageUrl(addedImageData.imageId)
-
         return { url }
-
-
 
     }
 

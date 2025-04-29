@@ -36,7 +36,8 @@ class ImagesModel {
             imageFileName: row.image_file_name,
             mimeType: row.mime_type,
             status: row.status,
-            userId: row.user_id
+            userId: row.user_id,
+            createdAt: row.created_at
         }
     }
 

@@ -1,6 +1,6 @@
 const pool = require('../services/db-service')
 const ImageModel = require('../models/images-model')
-const { DuplicateRecordError, DatabaseError } = require('../errors')
+const { DuplicateRecordError } = require('../errors')
 const DatabaseErrorHandler = require('../utils/database-error-handler')
 const { DB_DUP_ENTRY } = require('../constants/errors-constant')
 
@@ -100,7 +100,7 @@ class ImageRepository {
      */
     getUserPaginatedImagesFromDB = async (userId, offset, limit) => {
         try {
-            const images = await pool.query(`SELECT image_id, image_file_name, created_at FROM ${ImageModel.tableName} WHERE user_id=($1) ORDER BY created_at DESC LIMIT ($2) OFFSET ($3)`, [userId, limit, offset])
+            const images = await pool.query(`SELECT image_id, image_file_name, status, created_at FROM ${ImageModel.tableName} WHERE user_id=($1) ORDER BY created_at DESC LIMIT ($2) OFFSET ($3)`, [userId, limit, offset])
             const formattedImages = []
             // loop through images
             for (const image of images.rows) {
