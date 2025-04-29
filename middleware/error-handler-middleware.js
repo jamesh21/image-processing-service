@@ -10,7 +10,6 @@ const errorHandler = (err, req, res, next) => {
 
     if (!(err instanceof AppError) || customError.statusCode >= StatusCodes.INTERNAL_SERVER_ERROR) {
         console.log('entered error handler middleware')
-        console.log(err instanceof AppError)
         console.error(err)
     }
 

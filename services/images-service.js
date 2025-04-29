@@ -1,11 +1,12 @@
 const s3Service = require('./s3-service')
 const imageRepository = require('../repository/images-repository')
 const sharp = require('sharp');
-const { BadRequestError, UnauthenticatedError, ForbiddenError, NotFoundError } = require('../errors')
+const { BadRequestError, UnauthenticatedError, ForbiddenError, NotFoundError, AppError } = require('../errors')
 const path = require('path')
 const { SUPPORTED_FORMATS, FORMAT_MAPPING } = require('../constants/app-constant')
 const { queueTransformationUp } = require('../producer')
-const TransformerService = require('./transformer-service')
+const TransformerService = require('./transformer-service');
+const { DatabaseError } = require('../errors')
 
 class ImagesService {
 
@@ -22,20 +23,19 @@ class ImagesService {
             throw new BadRequestError('Image format is not supported')
         }
 
+        // retrieve metadata for image
+        let metadata = this.getFilteredMetadata(await this.getMetaData(buffer))
+
+        // check if file passed in is actually the correct file format as extension
+        // if not, convert it to that format
+        if (FORMAT_MAPPING[metadata.format].ext !== expectedType) {
+            buffer = await sharp(buffer).toFormat(expectedType).toBuffer()
+            // retrieve updated metadata after converting
+            metadata = this.getFilteredMetadata(await this.getMetaData(buffer))
+        }
+
+        const imageS3Key = `images/${fileName}`
         try {
-            // retrieve metadata for image
-            let metadata = this.getFilteredMetadata(await this.getMetaData(buffer))
-
-            // check if file passed in is actually the correct file format as extension
-            // if not, convert it to that format
-            if (FORMAT_MAPPING[metadata.format].ext !== expectedType) {
-                buffer = await sharp(buffer).toFormat(expectedType).toBuffer()
-                // retrieve updated metadata after converting
-                metadata = this.getFilteredMetadata(await this.getMetaData(buffer))
-            }
-
-            const imageS3Key = `images/${fileName}`
-
             // upload image to s3
             await s3Service.uploadFile({
                 buffer,
@@ -44,16 +44,7 @@ class ImagesService {
             })
 
             // Using s3 key, add to DB
-            // const addedImageData = await this.addImageToDB(userId, imageKey, fileName, FORMAT_MAPPING[expectedType].mime)
-            const addedImageData = await imageRepository.addImageToDB(
-                {
-                    userId,
-                    imageS3Key,
-                    'imageFileName': fileName,
-                    'mimeType': FORMAT_MAPPING[expectedType].mime,
-                    'status': 'ready'
-                }
-            )
+            const addedImageData = await imageRepository.addImageToDB({ userId, imageS3Key, imageFileName: fileName, mimeType: FORMAT_MAPPING[expectedType].mime, status: 'ready' })
 
             // build api url for retrieving image
             const url = this.buildImageUrl(addedImageData.imageId)
@@ -61,6 +52,12 @@ class ImagesService {
             return { data: { url, metadata } }
 
         } catch (error) {
+            if (error instanceof DatabaseError) {
+                // Rollback entry in s3
+                await s3Service.deleteImage(imageS3Key)
+                console.log(`Removing ${imageS3Key} from s3 since there was a db insertion failure`)
+            }
+
             throw error
         }
     }
@@ -102,24 +99,24 @@ class ImagesService {
             throw new BadRequestError('Image format is not supported')
         }
 
-        try {
-            const image = await this.getImageFromDB(imageId)
-            // check if user is owner of image 
-            if (userId !== image.userId) {
-                throw new ForbiddenError('User cannot access this image')
-            }
-            // Retrieves image stream from s3
-            const { Body } = await s3Service.getImage(image.imageS3Key)
-
-            if (format) {
-                const { transformer } = this.buildTransformer({ format })
-                // Returns image stream with transformed format
-                return { stream: Body.pipe(transformer), mimeType: `image/${format}` }
-            }
-            return { stream: Body, mimeType: image.mimeType }
-        } catch (err) {
-            throw err
+        const image = await imageRepository.getImageFromDB(imageId)
+        if (!image) {
+            throw new NotFoundError(`Image was not found for image id ${imageId}`)
         }
+        // check if user is owner of image 
+        if (userId !== image.userId) {
+            throw new ForbiddenError('User cannot access this image')
+        }
+        // Retrieves image stream from s3
+        const { Body } = await s3Service.getImage(image.imageS3Key)
+
+        if (format) {
+            const transformer = TransformerService.createTransformer({ format })
+            // Returns image stream with transformed format
+            return { stream: Body.pipe(transformer), mimeType: `image/${format}` }
+        }
+        return { stream: Body, mimeType: image.mimeType }
+
     }
 
     /**
@@ -136,39 +133,37 @@ class ImagesService {
         if (!userId) {
             throw new UnauthenticatedError('User is not logged in')
         }
-        try {
-            // retrieve image details from db
-            const imageDetailsFromDB = await this.getImageFromDB(imageId)
 
-            if (userId !== imageDetailsFromDB.userId) {
-                throw new ForbiddenError('User cannot access this image')
-            }
-
-            // Check if transformations have any errors
-            const errors = TransformerService.validate(transformations)
-            if (errors.length > 1) {
-                throw new BadRequestError(errors.join(', '))
-            }
-
-            // create row in db for rabbitmq to populate later
-            // const addedImageData = await this.addImageToDB(userId)
-            const addedImageData = await imageRepository.addImageToDB({ userId }) // this will fail, when 
-
-            // Send transformation information to rabbitmq
-            queueTransformationUp(imageDetailsFromDB.imageFileName, imageDetailsFromDB.imageS3Key, addedImageData.imageId, transformations)
-
-
-            // TODO add to redis cache, With this name, we can check cache
-
-            // create dummy url first for user to access when image transformation is finished processing
-            const url = this.buildImageUrl(addedImageData.imageId)
-
-            // return { url, metadata }
-            return { url }
-
-        } catch (error) {
-            throw error
+        // retrieve image details from db
+        const imageDetailsFromDB = await imageRepository.getImageFromDB(imageId)
+        if (!imageDetailsFromDB) {
+            throw new NotFoundError(`Image was not found for image id ${imageId}`)
         }
+
+        if (userId !== imageDetailsFromDB.userId) {
+            throw new ForbiddenError('User cannot access this image')
+        }
+
+        // Check if transformations have any errors
+        const errors = TransformerService.validate(transformations)
+        if (errors.length > 1) {
+            throw new BadRequestError(errors.join(', '))
+        }
+
+        // create row in db for rabbitmq to populate later
+        const addedImageData = await imageRepository.addImageToDB({ userId }) // this will fail, when 
+
+        // Send transformation information to rabbitmq
+        queueTransformationUp(imageDetailsFromDB.imageFileName, imageDetailsFromDB.imageS3Key, addedImageData.imageId, transformations)
+
+        // TODO add to redis cache, With this name, we can check cache
+
+        // create dummy url first for user to access when image transformation is finished processing
+        const url = this.buildImageUrl(addedImageData.imageId)
+
+        return { url }
+
+
 
     }
 
@@ -190,40 +185,7 @@ class ImagesService {
         try {
             return await sharp(buffer).metadata()
         } catch (error) {
-            throw new Error(`Failed to retrieve metadata for image with key ${imageKey}: ${error.message}`)
-        }
-    }
-
-    addImageToDB = async (userId, imageKey, fileName, mimeType) => {
-        try {
-            return await imageRepository.addImageToDB(userId, imageKey, fileName, mimeType)
-        } catch (error) {
-            try {
-                // Rollback entry in s3
-                await s3Service.deleteImage(imageKey)
-                console.error(`Removing ${imageKey} from s3 since there was a db insertion failure`)
-            } catch (s3Error) {
-                console.error('Failed to rollback s3 upload', {
-                    imageKey,
-                    originalError: error.message,
-                    rollbackError: s3Error.message
-                })
-            }
-            throw error
-        }
-    }
-    getImageFromDB = async (imageId) => {
-        try {
-            const image = await imageRepository.getImageFromDB(imageId)
-            if (!image) {
-                throw new NotFoundError(`Image was not found for image id ${imageId}`)
-            }
-            return image
-        } catch (error) {
-            if (error instanceof NotFoundError) {
-                throw error
-            }
-            throw new Error(`Failed to retrieve image from DB for image id ${imageId}`)
+            throw new AppError(`Failed to retrieve metadata for image with key ${imageKey}: ${error.message}`)
         }
     }
 }

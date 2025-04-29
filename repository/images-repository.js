@@ -1,7 +1,8 @@
 const pool = require('../services/db-service')
 const ImageModel = require('../models/images-model')
-const { DuplicateRecordError } = require('../errors')
-const { DatabaseErrorHandler } = require('../utils/database-error-handler')
+const { DuplicateRecordError, DatabaseError } = require('../errors')
+const DatabaseErrorHandler = require('../utils/database-error-handler')
+const { DB_DUP_ENTRY } = require('../constants/errors-constant')
 
 class ImageRepository {
     /**
@@ -19,7 +20,6 @@ class ImageRepository {
             const values = Object.values(image)
             const placeholders = values.map((_, index) => `$${index + 1}`).join(', ')
 
-            // Try catch for db queries?
             const sqlStatement = `INSERT INTO ${ImageModel.tableName} (${columns}) VALUES (${placeholders}) RETURNING *`
             const addedImage = await pool.query(sqlStatement, values)
 
@@ -49,6 +49,7 @@ class ImageRepository {
             const updatedImage = await pool.query(sqlStatement, values)
             return ImageModel.fromDb(updatedImage.rows[0])
         } catch (error) {
+            //TODO, should we have an catch case for not found image id when updating
             throw DatabaseErrorHandler.handle(error)
         }
     }

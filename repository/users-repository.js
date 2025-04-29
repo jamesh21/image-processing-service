@@ -1,7 +1,7 @@
 const pool = require('../services/db-service')
 const { DB_DUP_ENTRY } = require('../constants/errors-constant')
 const { DuplicateRecordError } = require('../errors')
-const { DatabaseErrorHandler } = require('../utils/database-error-handler')
+const DatabaseErrorHandler = require('../utils/database-error-handler')
 
 const UserModel = require('..//models/users-model')
 
