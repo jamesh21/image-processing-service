@@ -1,9 +1,9 @@
 const { StatusCodes } = require('http-status-codes')
+const AppError = require('./app-error')
 
-class UnauthenticatedError extends Error {
+class UnauthenticatedError extends AppError {
     constructor(message) {
-        super(message)
-        this.statusCode = StatusCodes.UNAUTHORIZED
+        super(message, StatusCodes.UNAUTHORIZED)
     }
 }
 

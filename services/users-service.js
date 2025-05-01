@@ -1,7 +1,7 @@
 const userRepository = require('../repository/users-repository')
 const bcrypt = require('bcryptjs')
 const jwt = require("jsonwebtoken");
-const { BadRequestError, UnauthenticatedError } = require('../errors')
+const { BadRequestError, UnauthenticatedError, NotFoundError } = require('../errors')
 
 class UserService {
     register = async (email, password, fullName) => {
@@ -21,8 +21,11 @@ class UserService {
         if (!email || !password) {
             throw new BadRequestError('Email or password was not provided')
         }
-        const user = await userRepository.getUserFromDB(email)
+        const user = await userRepository.getUserFromDB({ email })
 
+        if (!user) {
+            throw new NotFoundError('User was not found')
+        }
         const passwordMatch = await this.comparePassword(password, user.password)
 
         if (!passwordMatch) {

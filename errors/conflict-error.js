@@ -1,9 +1,9 @@
 const { StatusCodes } = require('http-status-codes')
+const AppError = require('./app-error')
 
-class ConflictError extends Error {
+class ConflictError extends AppError {
     constructor(message) {
-        super(message)
-        this.statusCode = StatusCodes.CONFLICT
+        super(message, StatusCodes.CONFLICT)
     }
 }
 

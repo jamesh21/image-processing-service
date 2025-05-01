@@ -16,7 +16,6 @@ async function queueTransformationUp(oldImageFileName, originalImageS3Key, newIm
     };
 
     channel.sendToQueue(queue, Buffer.from(JSON.stringify(job)));
-    console.log("Sent message to queue");
 
     await channel.close();
     await conn.close();

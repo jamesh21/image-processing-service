@@ -1,5 +1,5 @@
 const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
-
+const { AppError } = require('../errors')
 class S3Service {
     constructor() {
         this.bucketName = process.env.S3_BUCKET_NAME
@@ -21,11 +21,11 @@ class S3Service {
         };
 
         try {
+            // throw new AppError('something happend')
             const command = new PutObjectCommand(uploadParams)
             await this.s3.send(command)
         } catch (error) {
-            console.error(error.message)
-            throw new Error(`Failed to upload file with key ${key} to S3`)
+            throw new AppError(`Failed to upload file with key ${key} to S3`)
         }
 
     }
@@ -39,8 +39,7 @@ class S3Service {
             const command = new GetObjectCommand(input)
             return this.s3.send(command)
         } catch (error) {
-            console.error(error.message)
-            throw new Error(`Failed to retrieve file from S3 for ${s3Key}`)
+            throw new AppError(`Failed to retrieve file from S3 for ${s3Key}`)
         }
 
     }
@@ -50,8 +49,13 @@ class S3Service {
             Bucket: this.bucketName,
             Key: s3Key
         }
-        const command = new DeleteObjectCommand(input)
-        return this.s3.send(command)
+        try {
+            const command = new DeleteObjectCommand(input)
+            return this.s3.send(command)
+        } catch (error) {
+            throw new AppError(`Failed to delete file from s3 for ${s3Key}`)
+        }
+
     }
 
 }
