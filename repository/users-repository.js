@@ -31,9 +31,12 @@ class UserRepository {
      * @param {*} email 
      * @returns 
      */
-    getUserFromDB = async (email) => {
+    getUserFromDB = async (criteria) => {
         try {
-            const user = await pool.query(`SELECT * FROM ${UserModel.tableName} WHERE email_address = ($1)`, [email])
+            const searchCriteria = UserModel.toDb(criteria)
+            const whereClause = `${Object.keys(searchCriteria)[0]} = ($1)`
+            const query = `SELECT * FROM ${UserModel.tableName} WHERE ${whereClause}`
+            const user = await pool.query(query, [Object.values(searchCriteria)[0]])
             return UserModel.fromDb(user.rows[0])
         } catch (err) {
             throw DatabaseErrorHandler.handle(err)

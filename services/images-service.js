@@ -7,12 +7,19 @@ const { SUPPORTED_FORMATS, FORMAT_MAPPING, IMAGE_STATUS } = require('../constant
 const { queueTransformationUp } = require('../producer')
 const TransformerService = require('./transformer-service');
 const { DatabaseError } = require('../errors')
+const UserRepository = require('../repository/users-repository')
 
 class ImagesService {
 
     uploadImage = async (file, userId) => {
         if (!file || !userId) {
             throw new BadRequestError('File or userId was not provided')
+        }
+
+        const user = await UserRepository.getUserFromDB({ userId })
+
+        if (!user) {
+            throw new NotFoundError('User was not found')
         }
         const originalname = file.originalname
         let buffer = file.buffer

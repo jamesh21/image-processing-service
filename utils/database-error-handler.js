@@ -11,8 +11,6 @@ class DatabaseErrorHandler {
             return new DatabaseError(DB_CONN_FAIL_MSG, StatusCodes.SERVICE_UNAVAILABLE, error.stack)
         } else if (error.code && error.code === DB_TIME_OUT) { // db timed out
             return new DatabaseError(DB_QUERY_TO, StatusCodes.GATEWAY_TIMEOUT, error.stack)
-        } else if (error.message) {
-            return new DatabaseError(error.message, StatusCodes.INTERNAL_SERVER_ERROR, error.stack)
         } else {
             return new DatabaseError(GENERIC_ERR_MSG, StatusCodes.INTERNAL_SERVER_ERROR, error.stack)
         }

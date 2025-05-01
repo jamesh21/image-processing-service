@@ -4,7 +4,7 @@ const auth = (req, res, next) => {
     //check if bearer token is available
     const authHeader = req.headers.authorization
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        throw new UnauthenticatedErrorror('Missing Authorization header or bearer token')
+        throw new UnauthenticatedError('Missing Authorization header or bearer token')
     }
     // get token value
     const token = authHeader.split(' ')[1]

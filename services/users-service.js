@@ -21,7 +21,7 @@ class UserService {
         if (!email || !password) {
             throw new BadRequestError('Email or password was not provided')
         }
-        const user = await userRepository.getUserFromDB(email)
+        const user = await userRepository.getUserFromDB({ email })
 
         if (!user) {
             throw new NotFoundError('User was not found')
