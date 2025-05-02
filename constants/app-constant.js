@@ -17,4 +17,5 @@ const IMAGE_STATUS = {
     processing: 'processing',
     failed: 'failed'
 }
+
 module.exports = { SUPPORTED_FORMATS, FORMAT_MAPPING, IMAGE_STATUS }

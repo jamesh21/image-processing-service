@@ -8,9 +8,9 @@ const sharp = require('sharp')
 const path = require('path')
 
 
-// Changes to be made, Calll s3 client here instead of calling image service
-// Call image model directly?????
-
+/**
+ * Consumer function for our job queue, Used to retrieve image from s3 and performs transfomations on it, and then uploading to s3 and writing to db.
+ */
 async function startConsumer() {
     const conn = await amqp.connect("amqp://localhost");
     const channel = await conn.createChannel();

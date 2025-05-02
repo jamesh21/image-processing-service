@@ -9,6 +9,7 @@ class UserRepository {
     createNewUserInDB = async (user) => {
 
         try {
+            // Retrieve db format of user fields, and dynamically creates db columns and placeholders for db insertion query
             const dbUser = UserModel.toDb(user)
             const columnNames = Object.keys(dbUser).join(', ')
             const values = Object.values(dbUser)
@@ -28,11 +29,12 @@ class UserRepository {
 
     /**
      * Retrieves specific users from users table, This will also return hashed password.
-     * @param {*} email 
+     * @param {*} criteria pass in an object with either userId or email of user to search for
      * @returns 
      */
     getUserFromDB = async (criteria) => {
         try {
+            // Retrieve db format and create query to search for user
             const searchCriteria = UserModel.toDb(criteria)
             const whereClause = `${Object.keys(searchCriteria)[0]} = ($1)`
             const query = `SELECT * FROM ${UserModel.tableName} WHERE ${whereClause}`

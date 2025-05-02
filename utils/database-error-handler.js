@@ -4,6 +4,11 @@ const { DB_CONN_REFUSED, DB_TIME_OUT, DB_INVALID_COL, DB_CONN_FAIL_MSG, DB_QUERY
 
 
 class DatabaseErrorHandler {
+    /**
+     * This function checks what type of error is passed in from database layer and then creates a correct response for that error.
+     * @param {*} error 
+     * @returns 
+     */
     static handle(error) {
         if (error.code && error.code === DB_INVALID_COL) {
             return new DatabaseError('Invalid Column entered', StatusCodes.BAD_REQUEST, error.stack)

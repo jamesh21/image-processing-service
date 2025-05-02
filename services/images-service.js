@@ -11,6 +11,12 @@ const UserRepository = require('../repository/users-repository')
 
 class ImagesService {
 
+    /**
+     * Uploads file to s3 bucket and creates an entry in our image DB
+     * @param {*} file 
+     * @param {*} userId 
+     * @returns url of where to access file and metadata on file
+     */
     uploadImage = async (file, userId) => {
         if (!file || !userId) {
             throw new BadRequestError('File or userId was not provided')
@@ -64,11 +70,17 @@ class ImagesService {
                 await s3Service.deleteImage(imageS3Key)
                 console.log(`Removing ${imageS3Key} from s3 since there was a db insertion failure`)
             }
-
             throw error
         }
     }
 
+    /**
+     * Retrieves all images data for this user. The number of data returned can be paginated.
+     * @param {*} userId 
+     * @param {*} page 
+     * @param {*} limit 
+     * @returns 
+     */
     getUserImages = async (userId, page, limit) => {
         if (!userId) {
             throw new UnauthenticatedError('User is not logged in')
@@ -94,6 +106,13 @@ class ImagesService {
         }
     }
 
+    /**
+     * Retrieves a single image based on image id passed in. Format can also be changed for this image
+     * @param {*} imageId 
+     * @param {*} userId 
+     * @param {*} format 
+     * @returns buffer stream for that image.
+     */
     getImage = async (imageId, userId, format) => {
 
         if (!userId) {
@@ -126,15 +145,14 @@ class ImagesService {
             return { stream: Body.pipe(transformer), mimeType: `image/${format}` }
         }
         return { stream: Body, mimeType: image.mimeType }
-
     }
 
     /**
-     * Transforms the image corresponding to the image id passed in. The transformed image will be added to the DB and reuploaded to s3
+     * Creates a new entry in image DB for transformed image. Transformation details are then sent to rabbit mq, for it to process transformation and update image entry when finished.
      * @param {*} imageId the image id of the image that will be transformed.
      * @param {*} userId 
      * @param {*} transformations an object of different transformations that will be performed on the image
-     * @returns 
+     * @returns url of where image can be accessed once transformed.
      */
     transformImage = async (imageId, userId, transformations) => {
         if (!imageId || !transformations) {
@@ -173,10 +191,21 @@ class ImagesService {
 
     }
 
+    /**
+     * Helper method for building image url
+     * @param {*} imageId 
+     * @returns url to access image 
+     */
     buildImageUrl = (imageId) => {
         return `${process.env.API_URL}/images/${imageId}`
     }
 
+    /**
+     * Helper method for customizing what metadata to retrieve
+     * @param {*} fullMetaData 
+     * @param {*} customFields 
+     * @returns 
+     */
     getFilteredMetadata = (fullMetaData, customFields) => {
         return {
             size: fullMetaData.size,
@@ -187,6 +216,11 @@ class ImagesService {
         }
     }
 
+    /**
+     * Helper method for retrieving metadata using sharp.
+     * @param {*} buffer 
+     * @returns 
+     */
     getMetaData = async (buffer) => {
         try {
             return await sharp(buffer).metadata()

@@ -12,6 +12,10 @@ class S3Service {
         });
     }
 
+    /**
+     * Uploads passed in buffer to s3 bucket
+     * @param {*} param0 
+     */
     async uploadFile({ buffer, key, mimetype }) {
         const uploadParams = {
             Bucket: this.bucketName,
@@ -21,7 +25,6 @@ class S3Service {
         };
 
         try {
-            // throw new AppError('something happend')
             const command = new PutObjectCommand(uploadParams)
             await this.s3.send(command)
         } catch (error) {
@@ -30,6 +33,11 @@ class S3Service {
 
     }
 
+    /**
+     * Retrieves image from s3 bucket
+     * @param {*} s3Key 
+     * @returns 
+     */
     getImage(s3Key) {
         const input = {
             Bucket: this.bucketName,
@@ -44,6 +52,11 @@ class S3Service {
 
     }
 
+    /**
+     * Deletes image from s3 bucket
+     * @param {*} s3Key 
+     * @returns 
+     */
     deleteImage(s3Key) {
         const input = {
             Bucket: this.bucketName,

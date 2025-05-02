@@ -1,6 +1,10 @@
 const { SUPPORTED_FORMATS } = require('../constants/app-constant')
 const sharp = require('sharp');
+
 class TransformerService {
+
+    // Map of all the transformations that are currently supported. For each key, 
+    // there are 3 functions responsible for returning label, validating and applying the transformation
     static transformationsMap = {
         rotate: {
             validate: (angle) => {
@@ -108,6 +112,11 @@ class TransformerService {
     }
 
 
+    /**
+     * Creates labels representing which transformations will be performed by using the passed in options parmameter
+     * @param {*} options 
+     * @returns an array of transformation labels
+     */
     static createLabels = (options) => {
         const labels = []
         for (const key in options) {
@@ -123,6 +132,11 @@ class TransformerService {
         return labels
     }
 
+    /**
+     * Validates if the options passed in are in the correct format
+     * @param {*} options 
+     * @returns an array of error messages that informs which option has formating errors, by default it will have size of 1 for the initial error message. 
+     */
     static validate = (options) => {
         const errors = ['Invalid input for the following transformatios']
         for (const key in options) {
@@ -140,6 +154,11 @@ class TransformerService {
         return errors
     }
 
+    /**
+     * Creates the transformer object from sharp and appends the transformations passed in.
+     * @param {*} options 
+     * @returns 
+     */
     static createTransformer = (options) => {
         let transformer = sharp()
         for (const key in options) {

@@ -1,6 +1,7 @@
-// test-producer.js
+
 const amqp = require("amqplib");
 
+// Function is used to add transformation job to our queue for consumer function to work on.
 async function queueTransformationUp(oldImageFileName, originalImageS3Key, newImageId, transformations) {
     const conn = await amqp.connect("amqp://localhost");
     const channel = await conn.createChannel();

@@ -4,6 +4,14 @@ const jwt = require("jsonwebtoken");
 const { BadRequestError, UnauthenticatedError, NotFoundError } = require('../errors')
 
 class UserService {
+
+    /**
+     * Registers a user by calling user repository to create an entry in DB with the passed in user info
+     * @param {*} email 
+     * @param {*} password 
+     * @param {*} fullName 
+     * @returns a response containing user information and auth token
+     */
     register = async (email, password, fullName) => {
         if (!email || !password || !fullName) {
             throw new BadRequestError('Email, password, or name was not provided')
@@ -17,6 +25,12 @@ class UserService {
         return this.buildAuthResponse(user)
     }
 
+    /**
+     * Attempts to login user with passed in email and password.
+     * @param {*} email 
+     * @param {*} password 
+     * @returns if successful, user information and auth token is returned.
+     */
     login = async (email, password) => {
         if (!email || !password) {
             throw new BadRequestError('Email or password was not provided')
@@ -36,11 +50,21 @@ class UserService {
 
     }
 
-
+    /**
+     * Helper function for comparing passwords
+     * @param {*} password 
+     * @param {*} hashedPassword 
+     * @returns boolean if password is correct
+     */
     comparePassword = (password, hashedPassword) => {
         return bcrypt.compare(password, hashedPassword)
     }
 
+    /**
+     * Helper function for building response for new user or logged in user.
+     * @param {*} user 
+     * @returns an object containng auth token and user information.
+     */
     buildAuthResponse = (user) => {
         const token = jwt.sign(
             {

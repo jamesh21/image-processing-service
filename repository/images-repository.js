@@ -15,6 +15,7 @@ class ImageRepository {
       */
     addImageToDB = async (data) => {
         try {
+            // Retrieve db format of image fields, and dynamically creates db columns and placeholders for db insertion query
             const image = ImageModel.toDb(data)
             const columns = Object.keys(image).join(', ')
             const values = Object.values(image)
@@ -33,6 +34,12 @@ class ImageRepository {
         }
     }
 
+    /**
+     * Updates image details in DB
+     * @param {*} imageId 
+     * @param {*} data 
+     * @returns 
+     */
     updateImageInDB = async (imageId, data) => {
         const setStatements = [], values = []
         const image = ImageModel.toDb(data)
@@ -49,7 +56,6 @@ class ImageRepository {
             const updatedImage = await pool.query(sqlStatement, values)
             return ImageModel.fromDb(updatedImage.rows[0])
         } catch (error) {
-            //TODO, should we have an catch case for not found image id when updating
             throw DatabaseErrorHandler.handle(error)
         }
     }

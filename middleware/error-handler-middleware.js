@@ -11,7 +11,7 @@ const errorHandler = (err, req, res, next) => {
     if (!(err instanceof AppError) || customError.statusCode >= StatusCodes.INTERNAL_SERVER_ERROR) {
         console.error(err)
     }
-    if (customError.statusCode == StatusCodes.INTERNAL_SERVER_ERROR) {
+    if (customError.statusCode == StatusCodes.INTERNAL_SERVER_ERROR) { // sets generic message if 500 status code
         customError.message = GENERIC_ERR_MSG
     }
     res.status(customError.statusCode).json({ error: customError.message });

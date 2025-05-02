@@ -23,7 +23,7 @@ const getImage = async (req, res) => {
     const { id } = req.params
     const { userId } = req.user
     const { format } = req.query
-    // Need to check if user has access to this image
+
     const { stream, mimeType } = await imagesService.getImage(id, userId, format)
 
     res.setHeader('Content-Type', mimeType);
