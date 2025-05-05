@@ -92,7 +92,7 @@ Ensure you have the following installed:
 ### Transform an Image
 - `POST /api/images/:imageId/transform - Performs transformations on image Id
 - **Sample transformation option to pass in:**
-`
+```ini
 {
     "transformations": {
       "resize": {
@@ -105,7 +105,7 @@ Ensure you have the following installed:
       "sepia": true
     }
 }
-`
+  ```
 
 
 ## 🛠 Future Improvements
