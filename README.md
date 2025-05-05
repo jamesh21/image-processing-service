@@ -67,15 +67,14 @@ Ensure you have the following installed:
 
 ### Start API Server
 
-\`\`\`bash
-npm start
-\`\`\`
+`npm start`
+
 
 ### Start RabbitMQ Consumer
 
-\`\`\`bash
-node consumer.js
-\`\`\`
+
+`node consumer.js`
+
 
 ## 📤 API Endpoints
 
@@ -92,8 +91,8 @@ node consumer.js
 
 ### Transform an Image
 - `POST /api/images/:imageId/transform - Performs transformations on image Id
-**Sample transformation option to pass in:**
-\`\`\`json
+- **Sample transformation option to pass in:**
+`
 {
     "transformations": {
       "resize": {
@@ -106,7 +105,7 @@ node consumer.js
       "sepia": true
     }
 }
-\`\`\`
+`
 
 
 ## 🛠 Future Improvements
